@@ -41,7 +41,11 @@ class DocumentStorageService {
 
     /// Default documents directory in Application Support
     var defaultDocumentsDirectory: URL {
-        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            // Fallback to user's home directory if Application Support unavailable
+            return fileManager.homeDirectoryForCurrentUser
+                .appendingPathComponent("Documents/RoBergBoekhouding", isDirectory: true)
+        }
         return appSupport.appendingPathComponent("RoBergBoekhouding/Documents", isDirectory: true)
     }
 

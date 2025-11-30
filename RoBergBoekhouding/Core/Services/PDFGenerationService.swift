@@ -27,10 +27,14 @@ class PDFGenerationService {
         await withCheckedContinuation { continuation in
             DispatchQueue.main.async {
                 let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 595, height: 842)) // A4 at 72 DPI
-                webView.loadHTMLString(html, baseURL: nil)
 
-                // Wait for content to load before generating PDF
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                // Use navigation delegate to wait for content to fully load
+                let delegate = PDFWebViewDelegate { [weak webView] in
+                    guard let webView = webView else {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+
                     let config = WKPDFConfiguration()
                     config.rect = NSRect(x: 0, y: 0, width: 595, height: 842)
 
@@ -44,6 +48,12 @@ class PDFGenerationService {
                         }
                     }
                 }
+
+                webView.navigationDelegate = delegate
+                // Store delegate to keep it alive during async operation
+                objc_setAssociatedObject(webView, "pdfDelegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+
+                webView.loadHTMLString(html, baseURL: nil)
             }
         }
     }
@@ -392,5 +402,41 @@ enum PDFError: LocalizedError {
         case .saveFailed:
             return "Kon PDF niet opslaan"
         }
+    }
+}
+
+// MARK: - WebView Navigation Delegate for PDF Generation
+
+/// Helper delegate that waits for WebView to finish loading before triggering PDF generation
+private class PDFWebViewDelegate: NSObject, WKNavigationDelegate {
+    private let onLoadComplete: () -> Void
+    private var hasCompleted = false
+
+    init(onLoadComplete: @escaping () -> Void) {
+        self.onLoadComplete = onLoadComplete
+        super.init()
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
+        // Small delay to ensure rendering is complete
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.onLoadComplete()
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
+        print("WebView navigation failed: \(error)")
+        onLoadComplete()
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard !hasCompleted else { return }
+        hasCompleted = true
+        print("WebView provisional navigation failed: \(error)")
+        onLoadComplete()
     }
 }

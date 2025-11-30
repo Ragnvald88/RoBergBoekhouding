@@ -129,11 +129,13 @@ final class Expense {
         self.id = id
         self.datum = datum
         self.omschrijving = omschrijving
-        self.bedrag = bedrag
+        // Validate: bedrag cannot be negative
+        self.bedrag = max(0, bedrag)
         self.categorieRaw = categorie.rawValue
         self.leverancier = leverancier
         self.documentPath = documentPath
-        self.zakelijkPercentage = zakelijkPercentage
+        // Validate: percentage must be between 0 and 100
+        self.zakelijkPercentage = min(100, max(0, zakelijkPercentage))
         self.isRecurring = isRecurring
         self.notities = notities
         self.createdAt = Date()

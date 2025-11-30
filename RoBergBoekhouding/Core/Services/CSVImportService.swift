@@ -310,7 +310,9 @@ actor CSVImportService {
 
         // Check for duplicate (same date, code, hours)
         let startOfDay = Calendar.current.startOfDay(for: datum)
-        let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay)!
+        guard let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay) else {
+            return .error("Kan datum niet verwerken")
+        }
 
         let descriptor = FetchDescriptor<TimeEntry>(
             predicate: #Predicate { entry in

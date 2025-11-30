@@ -169,8 +169,10 @@ struct DashboardView: View {
             Text("Zelfstandigenaftrek")
                 .font(.headline)
 
+            // NOTE: For zelfstandigenaftrek, ALL worked hours count (including admin, training)
+            // This is per Dutch tax law - not just billable hours
             let target = Decimal(settings.first?.urendrempelZelfstandigenaftrek ?? 1225)
-            let current = yearEntries.totalBillableHours
+            let current = yearEntries.totalHours
             let progress = min(current / target, 1.0)
             let remaining = max(target - current, 0)
 

@@ -182,14 +182,23 @@ extension BusinessSettings {
     }
 
     /// Check if settings exist, otherwise create defaults
+    /// Also ensures only one settings record exists (deletes duplicates)
     static func ensureSettingsExist(in context: ModelContext) -> BusinessSettings {
         let descriptor = FetchDescriptor<BusinessSettings>()
 
         do {
             let existing = try context.fetch(descriptor)
-            if let settings = existing.first {
-                settings.updateYearPrefix()
-                return settings
+            if !existing.isEmpty {
+                // Keep the first (oldest) settings record, delete any duplicates
+                let settingsToKeep = existing[0]
+                if existing.count > 1 {
+                    for duplicateSettings in existing.dropFirst() {
+                        context.delete(duplicateSettings)
+                    }
+                    try? context.save()
+                }
+                settingsToKeep.updateYearPrefix()
+                return settingsToKeep
             }
         } catch {
             print("Error fetching settings: \(error)")

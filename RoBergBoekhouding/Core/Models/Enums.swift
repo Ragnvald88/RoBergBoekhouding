@@ -42,6 +42,11 @@ enum InvoiceStatus: String, Codable, CaseIterable {
         case .oninbaar: return "purple"
         }
     }
+
+    /// All other statuses (excluding current)
+    var otherStatuses: [InvoiceStatus] {
+        InvoiceStatus.allCases.filter { $0 != self }
+    }
 }
 
 // MARK: - Expense Category (matching VvAA/Dutch tax structure)

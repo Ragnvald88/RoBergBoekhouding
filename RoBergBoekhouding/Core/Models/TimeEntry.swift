@@ -97,11 +97,14 @@ final class TimeEntry {
         self.code = code
         self.activiteit = activiteit
         self.locatie = locatie
-        self.uren = uren
-        self.visiteKilometers = visiteKilometers
-        self.retourafstandWoonWerk = retourafstandWoonWerk
-        self.uurtarief = uurtarief
-        self.kilometertarief = kilometertarief
+        // Validate: hours cannot be negative
+        self.uren = max(0, uren)
+        // Validate: kilometers cannot be negative
+        self.visiteKilometers = visiteKilometers.map { max(0, $0) }
+        self.retourafstandWoonWerk = max(0, retourafstandWoonWerk)
+        // Validate: rates cannot be negative
+        self.uurtarief = max(0, uurtarief)
+        self.kilometertarief = max(0, kilometertarief)
         self.opmerkingen = opmerkingen
         self.isBillable = isBillable
         self.isInvoiced = isInvoiced

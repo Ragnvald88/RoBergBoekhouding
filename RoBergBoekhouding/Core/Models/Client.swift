@@ -95,10 +95,11 @@ final class Client {
         return entries.reduce(0) { $0 + $1.uren }
     }
 
-    /// Calculate total kilometers driven for this client
+    /// Calculate total kilometers driven for this client (includes return + visit km)
     var totalKilometers: Int {
         guard let entries = timeEntries else { return 0 }
-        return entries.reduce(0) { $0 + $1.retourafstandWoonWerk }
+        // Use totaalKilometers to include both retourafstand AND visiteKilometers
+        return entries.reduce(0) { $0 + $1.totaalKilometers }
     }
 
     /// Get unbilled time entries

@@ -9,9 +9,21 @@ struct ExpenseListView: View {
 
     @State private var selectedExpense: Expense?
     @State private var categoryFilter: ExpenseCategory?
+    @State private var selectedMonth: Int?
+    @State private var expenseToEdit: Expense?
+    @State private var expenseToDelete: Expense?
+    @State private var showEditSheet = false
+    @State private var showDeleteAlert = false
 
     private var filteredExpenses: [Expense] {
         var expenses = allExpenses.filterByYear(appState.selectedYear)
+
+        if let month = selectedMonth {
+            let calendar = Calendar.current
+            expenses = expenses.filter {
+                calendar.component(.month, from: $0.datum) == month
+            }
+        }
 
         if let category = categoryFilter {
             expenses = expenses.filterByCategory(category)
@@ -51,8 +63,18 @@ struct ExpenseListView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(filteredExpenses, selection: $selectedExpense) { expense in
-                        ExpenseRow(expense: expense)
-                            .tag(expense)
+                        ExpenseRow(
+                            expense: expense,
+                            onEdit: {
+                                expenseToEdit = expense
+                                showEditSheet = true
+                            },
+                            onDelete: {
+                                expenseToDelete = expense
+                                showDeleteAlert = true
+                            }
+                        )
+                        .tag(expense)
                     }
                     .listStyle(.plain)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -84,15 +106,55 @@ struct ExpenseListView: View {
                 }
                 .frame(width: 80)
 
+                Picker("Maand", selection: $selectedMonth) {
+                    Text("Alle maanden").tag(nil as Int?)
+                    ForEach(1...12, id: \.self) { month in
+                        Text(monthName(month)).tag(month as Int?)
+                    }
+                }
+                .frame(width: 120)
+
                 Button("Nieuwe Uitgave", systemImage: "plus") {
                     appState.showNewExpense = true
                 }
             }
         }
+        .onChange(of: appState.selectedYear) { _, _ in
+            selectedMonth = nil // Reset month when year changes
+        }
         .searchable(text: $appState.searchText, prompt: "Zoek uitgave")
         .sheet(isPresented: $appState.showNewExpense) {
             ExpenseFormView(expense: nil)
         }
+        .sheet(isPresented: $showEditSheet) {
+            if let expense = expenseToEdit {
+                ExpenseFormView(expense: expense)
+            }
+        }
+        .alert("Uitgave verwijderen", isPresented: $showDeleteAlert) {
+            Button("Annuleren", role: .cancel) {
+                expenseToDelete = nil
+            }
+            Button("Verwijderen", role: .destructive) {
+                if let expense = expenseToDelete {
+                    deleteExpense(expense)
+                }
+            }
+        } message: {
+            if let expense = expenseToDelete {
+                Text("Weet je zeker dat je '\(expense.omschrijving)' wilt verwijderen?")
+            }
+        }
+    }
+
+    private func deleteExpense(_ expense: Expense) {
+        // Clear selection if this expense was selected
+        if selectedExpense?.id == expense.id {
+            selectedExpense = nil
+        }
+        modelContext.delete(expense)
+        try? modelContext.save()
+        expenseToDelete = nil
     }
 
     // MARK: - Summary Bar
@@ -173,11 +235,19 @@ struct ExpenseListView: View {
         case .overig: return "Overig"
         }
     }
+
+    private func monthName(_ month: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "nl_NL")
+        return formatter.monthSymbols[month - 1].capitalized
+    }
 }
 
 // MARK: - Expense Row
 struct ExpenseRow: View {
     let expense: Expense
+    let onEdit: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -229,12 +299,26 @@ struct ExpenseRow: View {
         }
         .padding(.vertical, 4)
         .contextMenu {
+            Button {
+                onEdit()
+            } label: {
+                Label("Bewerken", systemImage: "pencil")
+            }
+
             if expense.hasReceipt {
                 Button {
                     expense.openReceipt()
                 } label: {
                     Label("Open bon", systemImage: "doc.fill")
                 }
+            }
+
+            Divider()
+
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("Verwijderen", systemImage: "trash")
             }
         }
     }

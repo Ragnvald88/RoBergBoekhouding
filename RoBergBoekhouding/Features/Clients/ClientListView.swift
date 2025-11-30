@@ -113,9 +113,24 @@ struct ClientRow: View {
 
             // Info
             VStack(alignment: .leading, spacing: 2) {
-                Text(client.bedrijfsnaam)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(client.isActive ? .primary : .secondary)
+                HStack {
+                    Text(client.bedrijfsnaam)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(client.isActive ? .primary : .secondary)
+
+                    Spacer()
+
+                    // Unbilled indicator
+                    if client.unbilledAmount > 0 {
+                        Text(client.unbilledAmount.asCurrency)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.orange)
+                            .clipShape(Capsule())
+                    }
+                }
 
                 if let contact = client.contactpersoon, !contact.isEmpty {
                     Text(contact)
@@ -130,8 +145,6 @@ struct ClientRow: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
             }
-
-            Spacer()
         }
         .padding(.vertical, 4)
     }
@@ -209,8 +222,28 @@ struct ClientDetailView: View {
                 deleteClient()
             }
         } message: {
-            Text("Weet je zeker dat je '\(client.bedrijfsnaam)' wilt verwijderen? Dit kan niet ongedaan worden gemaakt.")
+            Text(deleteWarningMessage)
         }
+    }
+
+    private var deleteWarningMessage: String {
+        var message = "Weet je zeker dat je '\(client.bedrijfsnaam)' wilt verwijderen?"
+
+        let entryCount = client.timeEntries?.count ?? 0
+        let invoiceCount = client.invoices?.count ?? 0
+
+        if entryCount > 0 || invoiceCount > 0 {
+            message += "\n\nDit verwijdert ook:"
+            if entryCount > 0 {
+                message += "\n• \(entryCount) urenregistratie\(entryCount == 1 ? "" : "s")"
+            }
+            if invoiceCount > 0 {
+                message += "\n• \(invoiceCount) factu\(invoiceCount == 1 ? "ur" : "ren")"
+            }
+        }
+
+        message += "\n\nDit kan niet ongedaan worden gemaakt."
+        return message
     }
 
     // MARK: - Header Section

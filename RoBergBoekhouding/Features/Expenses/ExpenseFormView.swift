@@ -18,6 +18,7 @@ struct ExpenseFormView: View {
     @State private var isRecurring: Bool = false
     @State private var notities: String = ""
     @State private var receiptError: String?
+    @State private var pendingReceiptURL: URL? // For new expenses - receipt to attach after save
 
     private var isEditing: Bool { expense != nil }
     private var canSave: Bool { !omschrijving.isEmpty && bedrag > 0 }
@@ -91,41 +92,53 @@ struct ExpenseFormView: View {
                         .frame(height: 60)
                 }
 
-                // Receipt section (only shown when editing)
-                if let expense, isEditing {
-                    Section("Bonnetje / Factuur") {
-                        if expense.hasReceipt {
-                            HStack {
-                                Image(systemName: "doc.fill")
-                                    .foregroundStyle(.green)
-                                Text("Bon toegevoegd")
-                                    .foregroundStyle(.green)
-                                Spacer()
-                                Button("Bekijk") {
-                                    expense.openReceipt()
-                                }
-                                Button("Verwijder", role: .destructive) {
-                                    removeReceipt()
-                                }
+                // Receipt section
+                Section("Bonnetje / Factuur") {
+                    if let expense, expense.hasReceipt {
+                        // Existing expense with receipt
+                        HStack {
+                            Image(systemName: "doc.fill")
+                                .foregroundStyle(.green)
+                            Text("Bon toegevoegd")
+                                .foregroundStyle(.green)
+                            Spacer()
+                            Button("Bekijk") {
+                                expense.openReceipt()
                             }
-                        } else {
-                            HStack {
-                                Image(systemName: "doc.badge.plus")
-                                    .foregroundStyle(.secondary)
-                                Text("Geen bon toegevoegd")
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Button("Voeg bon toe...") {
-                                    selectReceipt()
-                                }
+                            Button("Verwijder", role: .destructive) {
+                                removeReceipt()
                             }
                         }
+                    } else if pendingReceiptURL != nil {
+                        // New expense with pending receipt
+                        HStack {
+                            Image(systemName: "doc.fill")
+                                .foregroundStyle(.blue)
+                            Text("Bon geselecteerd")
+                                .foregroundStyle(.blue)
+                            Spacer()
+                            Button("Verwijder", role: .destructive) {
+                                pendingReceiptURL = nil
+                            }
+                        }
+                    } else {
+                        // No receipt
+                        HStack {
+                            Image(systemName: "doc.badge.plus")
+                                .foregroundStyle(.secondary)
+                            Text("Geen bon toegevoegd")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Voeg bon toe...") {
+                                selectReceipt()
+                            }
+                        }
+                    }
 
-                        if let error = receiptError {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
+                    if let error = receiptError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
                     }
                 }
             }
@@ -216,6 +229,11 @@ struct ExpenseFormView: View {
                 notities: notities.isEmpty ? nil : notities
             )
             modelContext.insert(newExpense)
+
+            // Attach pending receipt if any
+            if let receiptURL = pendingReceiptURL {
+                try? newExpense.attachReceipt(from: receiptURL)
+            }
         }
 
         try? modelContext.save()
@@ -234,7 +252,6 @@ struct ExpenseFormView: View {
     }
 
     private func selectReceipt() {
-        guard let expense else { return }
         receiptError = nil
 
         let panel = NSOpenPanel()
@@ -245,11 +262,17 @@ struct ExpenseFormView: View {
         panel.message = "Selecteer bon of factuur"
 
         if panel.runModal() == .OK, let url = panel.url {
-            do {
-                try expense.attachReceipt(from: url)
-                try modelContext.save()
-            } catch {
-                receiptError = "Kon bon niet toevoegen: \(error.localizedDescription)"
+            if let expense {
+                // Existing expense - attach immediately
+                do {
+                    try expense.attachReceipt(from: url)
+                    try modelContext.save()
+                } catch {
+                    receiptError = "Kon bon niet toevoegen: \(error.localizedDescription)"
+                }
+            } else {
+                // New expense - store URL for later attachment
+                pendingReceiptURL = url
             }
         }
     }

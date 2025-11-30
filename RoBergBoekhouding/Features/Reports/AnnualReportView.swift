@@ -144,7 +144,8 @@ struct AnnualReportView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
-                    let hours = yearEntries.totalBillableHours
+                    // NOTE: For zelfstandigenaftrek, ALL worked hours count (not just billable)
+                    let hours = yearEntries.totalHours
                     let threshold: Decimal = 1225
                     let met = hours >= threshold
 

@@ -177,6 +177,28 @@ struct InvoiceListView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .frame(maxWidth: 400)
 
+            // Bulk status change
+            VStack(spacing: 8) {
+                Text("Status wijzigen naar:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 12) {
+                    ForEach(InvoiceStatus.allCases, id: \.self) { status in
+                        Button {
+                            bulkUpdateStatus(status)
+                        } label: {
+                            Text(status.displayName)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(statusColor(status))
+                    }
+                }
+            }
+
+            Divider()
+                .frame(maxWidth: 300)
+
             // Bulk actions
             HStack(spacing: 16) {
                 Button(role: .destructive) {
@@ -196,6 +218,23 @@ struct InvoiceListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func bulkUpdateStatus(_ status: InvoiceStatus) {
+        for invoice in selectedInvoices {
+            invoice.updateStatus(status)
+        }
+        try? modelContext.save()
+    }
+
+    private func statusColor(_ status: InvoiceStatus) -> Color {
+        switch status {
+        case .concept: return .gray
+        case .verzonden: return .orange
+        case .betaald: return .green
+        case .herinnering: return .red
+        case .oninbaar: return .purple
+        }
     }
 
     // MARK: - Delete Invoices
@@ -418,9 +457,9 @@ struct InvoiceDetailView: View {
 
                 // Actions Menu
                 Menu {
-                    // Status submenu
+                    // Status submenu - show all other statuses
                     Menu {
-                        ForEach(InvoiceStatus.allCases, id: \.self) { status in
+                        ForEach(invoice.status.otherStatuses, id: \.self) { status in
                             Button(status.displayName) {
                                 updateStatus(status)
                             }

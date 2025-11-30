@@ -9,7 +9,7 @@ struct TimeEntryListView: View {
 
     @State private var selectedEntries: Set<TimeEntry.ID> = []
     @State private var showingDeleteAlert = false
-    @State private var entryToDelete: TimeEntry?
+    @State private var entriesToDelete: [TimeEntry] = []
 
     private var filteredEntries: [TimeEntry] {
         var entries = allEntries.filterByYear(appState.selectedYear)
@@ -103,18 +103,25 @@ struct TimeEntryListView: View {
                     .width(min: 100, ideal: 120)
                 }
                 .contextMenu(forSelectionType: TimeEntry.ID.self) { selection in
-                    if selection.count == 1, let id = selection.first,
-                       let entry = filteredEntries.first(where: { $0.id == id }) {
-                        Button("Bewerken") {
+                    let selectedItems = filteredEntries.filter { selection.contains($0.id) }
+
+                    if selectedItems.count == 1, let entry = selectedItems.first {
+                        Button {
                             appState.selectedTimeEntry = entry
                             appState.showNewTimeEntry = true
+                        } label: {
+                            Label("Bewerken", systemImage: "pencil")
                         }
 
                         Divider()
+                    }
 
-                        Button("Verwijderen", role: .destructive) {
-                            entryToDelete = entry
+                    if !selectedItems.isEmpty {
+                        Button(role: .destructive) {
+                            entriesToDelete = selectedItems
                             showingDeleteAlert = true
+                        } label: {
+                            Label(selectedItems.count == 1 ? "Verwijderen" : "Verwijder \(selectedItems.count) items", systemImage: "trash")
                         }
                     }
                 } primaryAction: { selection in
@@ -130,6 +137,19 @@ struct TimeEntryListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Urenregistratie")
         .toolbar {
+            // Delete button when items selected
+            ToolbarItemGroup(placement: .destructiveAction) {
+                if !selectedEntries.isEmpty {
+                    Button(role: .destructive) {
+                        let items = filteredEntries.filter { selectedEntries.contains($0.id) }
+                        entriesToDelete = items
+                        showingDeleteAlert = true
+                    } label: {
+                        Label("Verwijder (\(selectedEntries.count))", systemImage: "trash")
+                    }
+                }
+            }
+
             ToolbarItemGroup(placement: .primaryAction) {
                 // Year Picker
                 Picker("Jaar", selection: $appState.selectedYear) {
@@ -158,13 +178,26 @@ struct TimeEntryListView: View {
         .sheet(isPresented: $appState.showNewTimeEntry) {
             TimeEntryFormView(entry: appState.selectedTimeEntry)
         }
-        .alert("Verwijderen", isPresented: $showingDeleteAlert, presenting: entryToDelete) { entry in
-            Button("Annuleren", role: .cancel) { }
-            Button("Verwijderen", role: .destructive) {
-                deleteEntry(entry)
+        .alert(
+            entriesToDelete.count == 1 ? "Registratie verwijderen" : "\(entriesToDelete.count) registraties verwijderen",
+            isPresented: $showingDeleteAlert
+        ) {
+            Button("Annuleren", role: .cancel) {
+                entriesToDelete = []
             }
-        } message: { entry in
-            Text("Weet je zeker dat je deze registratie wilt verwijderen?")
+            Button("Verwijderen", role: .destructive) {
+                deleteEntries(entriesToDelete)
+            }
+        } message: {
+            if entriesToDelete.count == 1 {
+                Text("Weet je zeker dat je deze registratie wilt verwijderen?")
+            } else {
+                Text("Weet je zeker dat je \(entriesToDelete.count) registraties wilt verwijderen?")
+            }
+        }
+        .onChange(of: appState.selectedYear) { _, _ in
+            // Reset month filter when year changes to avoid confusion
+            appState.selectedMonth = nil
         }
     }
 
@@ -196,9 +229,15 @@ struct TimeEntryListView: View {
         return formatter.monthSymbols[month - 1].capitalized
     }
 
-    private func deleteEntry(_ entry: TimeEntry) {
-        modelContext.delete(entry)
+    private func deleteEntries(_ entries: [TimeEntry]) {
+        for entry in entries {
+            // Remove from selection
+            selectedEntries.remove(entry.id)
+            // Delete entry
+            modelContext.delete(entry)
+        }
         try? modelContext.save()
+        entriesToDelete = []
     }
 }
 

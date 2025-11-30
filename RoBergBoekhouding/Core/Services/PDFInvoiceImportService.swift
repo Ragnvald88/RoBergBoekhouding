@@ -119,7 +119,9 @@ class PDFInvoiceImportService {
             // Find the matching hours entry for this date
             let itemDate = item.date
             let startOfDay = Calendar.current.startOfDay(for: itemDate)
-            let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay)!
+            guard let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay) else {
+                continue // Skip this item if date calculation fails
+            }
             let searchInvoiceNum: String? = invoiceNum
 
             let descriptor = FetchDescriptor<TimeEntry>(
@@ -430,8 +432,8 @@ class PDFInvoiceImportService {
             total = quantity * rate
         }
 
-        // Estimate rate if not found
-        if rate == 0 && total > 0 {
+        // Estimate rate if not found (guard against division by zero)
+        if rate == 0 && total > 0 && quantity > 0 {
             rate = total / quantity
         }
 

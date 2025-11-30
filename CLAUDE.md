@@ -244,4 +244,54 @@ xcodebuild -project RoBergBoekhouding.xcodeproj -scheme RoBergBoekhouding -desti
 - Default hourly rates: €70 (dagpraktijk), €124 (ANW emergency)
 - Default km rate: €0.23/km
 - Payment term: 14 days
-- Zelfstandigenaftrek threshold: 1225 hours/year minimum
+- Zelfstandigenaftrek threshold: 1225 hours/year minimum (ALL hours count, not just billable)
+
+## Input Validation
+
+Models validate input in their initializers:
+- **TimeEntry**: `uren >= 0`, `retourafstandWoonWerk >= 0`, `visiteKilometers >= 0`, rates >= 0
+- **Expense**: `bedrag >= 0`, `zakelijkPercentage` clamped to 0-100%
+
+## Invoice Status
+
+Invoice statuses: `concept`, `verzonden`, `betaald`, `herinnering`, `oninbaar`
+
+Users can change between any status using `InvoiceStatus.otherStatuses` (shows all statuses except current).
+
+## PDF Generation
+
+PDF generation uses WKWebView with proper load detection:
+```swift
+// PDFGenerationService uses WKNavigationDelegate to wait for HTML to fully load
+// before generating PDF, avoiding blank pages on slow systems
+let service = PDFGenerationService(settings: businessSettings)
+let pdfData = await service.generateInvoicePDF(for: invoice)
+```
+
+## Multi-Select Support
+
+InvoiceListView supports multi-select for bulk operations:
+- Shift+Click or Cmd+Click to select multiple invoices
+- Bulk delete available when multiple selected
+- Selection uses `Set<Invoice.ID>` pattern
+
+## UI Layout Notes
+
+All list views (InvoiceListView, ClientListView, ExpenseListView, TimeEntryListView) use:
+- `.frame(maxWidth: .infinity, maxHeight: .infinity)` on List/Table components
+- Proper frame constraints on HSplitView panels
+- This prevents layout issues where lists don't render correctly initially
+
+## Deleting Records
+
+### Time Entries
+- Select entries in the table (click or Shift+Click for multiple)
+- Use toolbar delete button or right-click context menu
+- Supports bulk delete of multiple selected entries
+
+### Invoices
+- Select invoices in the list (Cmd+Click for multiple)
+- Use context menu "Verwijderen" or detail view "Acties" menu
+- Deleting an invoice also:
+  - Deletes associated PDF files
+  - Unlinks time entries (marks them as not invoiced)
