@@ -43,6 +43,7 @@ struct TimeEntryListView: View {
                     systemImage: "clock",
                     description: Text("Klik op 'Nieuwe Registratie' om te beginnen")
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Table(filteredEntries, selection: $selectedEntries) {
                     TableColumn("Datum") { entry in
@@ -123,8 +124,10 @@ struct TimeEntryListView: View {
                         appState.showNewTimeEntry = true
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Urenregistratie")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {

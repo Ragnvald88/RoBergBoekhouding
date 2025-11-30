@@ -66,8 +66,10 @@ struct ClientListView: View {
                     }
                 }
                 .listStyle(.sidebar)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(minWidth: 250, idealWidth: 300)
+            .frame(minWidth: 250, idealWidth: 300, maxWidth: 400)
+            .frame(maxHeight: .infinity)
 
             // Detail View
             if let client = selectedClient {
@@ -78,8 +80,10 @@ struct ClientListView: View {
                     systemImage: "person.2",
                     description: Text("Kies een klant uit de lijst om details te bekijken")
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Klanten")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

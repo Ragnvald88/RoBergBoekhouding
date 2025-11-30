@@ -48,15 +48,18 @@ struct ExpenseListView: View {
                         systemImage: "creditcard",
                         description: Text("Klik op 'Nieuwe Uitgave' om te beginnen")
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(filteredExpenses, selection: $selectedExpense) { expense in
                         ExpenseRow(expense: expense)
                             .tag(expense)
                     }
                     .listStyle(.plain)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 350)
+            .frame(minWidth: 350, idealWidth: 400, maxWidth: 500)
+            .frame(maxHeight: .infinity)
 
             // Detail View
             if let expense = selectedExpense {
@@ -67,8 +70,10 @@ struct ExpenseListView: View {
                     systemImage: "creditcard",
                     description: Text("Kies een uitgave uit de lijst om details te bekijken")
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Uitgaven")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {

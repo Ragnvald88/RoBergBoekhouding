@@ -7,9 +7,10 @@ struct InvoiceListView: View {
 
     @Query(sort: \Invoice.factuurdatum, order: .reverse) private var allInvoices: [Invoice]
 
-    @State private var selectedInvoice: Invoice?
+    @State private var selectedInvoiceIDs: Set<Invoice.ID> = []
     @State private var statusFilter: InvoiceStatus?
-    @State private var invoiceToDelete: Invoice?
+    @State private var invoicesToDelete: [Invoice] = []
+    @State private var showDeleteAlert = false
 
     private var filteredInvoices: [Invoice] {
         var invoices = allInvoices.filterByYear(appState.selectedYear)
@@ -28,6 +29,17 @@ struct InvoiceListView: View {
         return invoices
     }
 
+    /// Currently selected invoices based on IDs
+    private var selectedInvoices: [Invoice] {
+        filteredInvoices.filter { selectedInvoiceIDs.contains($0.id) }
+    }
+
+    /// Single selected invoice for detail view (first selected)
+    private var selectedInvoice: Invoice? {
+        guard let firstID = selectedInvoiceIDs.first else { return nil }
+        return filteredInvoices.first { $0.id == firstID }
+    }
+
     var body: some View {
         HSplitView {
             // Invoice List
@@ -42,29 +54,37 @@ struct InvoiceListView: View {
 
                 Divider()
 
-                // List
+                // List - use frame with maxHeight to ensure proper sizing
                 if filteredInvoices.isEmpty {
                     ContentUnavailableView(
                         "Geen facturen",
                         systemImage: "doc.text",
                         description: Text("Klik op 'Nieuwe Factuur' om te beginnen")
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    List(filteredInvoices, selection: $selectedInvoice) { invoice in
+                    List(filteredInvoices, id: \.id, selection: $selectedInvoiceIDs) { invoice in
                         InvoiceRow(invoice: invoice) {
-                            invoiceToDelete = invoice
+                            invoicesToDelete = [invoice]
+                            showDeleteAlert = true
                         }
-                        .tag(invoice)
+                        .tag(invoice.id)
                     }
                     .listStyle(.plain)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 350, idealWidth: 400)
+            .frame(minWidth: 350, idealWidth: 400, maxWidth: 500)
+            .frame(maxHeight: .infinity)
 
             // Detail View
-            if let invoice = selectedInvoice {
+            if selectedInvoiceIDs.count > 1 {
+                // Multiple selection view
+                multipleSelectionView
+            } else if let invoice = selectedInvoice {
                 InvoiceDetailView(invoice: invoice) {
-                    invoiceToDelete = invoice
+                    invoicesToDelete = [invoice]
+                    showDeleteAlert = true
                 }
             } else {
                 ContentUnavailableView(
@@ -72,8 +92,10 @@ struct InvoiceListView: View {
                     systemImage: "doc.text",
                     description: Text("Kies een factuur uit de lijst om details te bekijken")
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Facturen")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -93,49 +115,113 @@ struct InvoiceListView: View {
         .sheet(isPresented: $appState.showNewInvoice) {
             InvoiceGeneratorView()
         }
-        .alert("Factuur verwijderen", isPresented: Binding(
-            get: { invoiceToDelete != nil },
-            set: { if !$0 { invoiceToDelete = nil } }
-        )) {
+        .alert(deleteAlertTitle, isPresented: $showDeleteAlert) {
             Button("Annuleren", role: .cancel) {
-                invoiceToDelete = nil
+                invoicesToDelete = []
             }
             Button("Verwijderen", role: .destructive) {
-                if let invoice = invoiceToDelete {
-                    deleteInvoice(invoice)
-                }
+                deleteInvoices(invoicesToDelete)
             }
         } message: {
-            if let invoice = invoiceToDelete {
-                Text("Weet je zeker dat je factuur \(invoice.factuurnummer) wilt verwijderen? Dit verwijdert ook alle bijbehorende PDF bestanden.")
-            }
+            Text(deleteAlertMessage)
         }
     }
 
-    // MARK: - Delete Invoice
-    private func deleteInvoice(_ invoice: Invoice) {
-        // Delete associated PDFs
-        invoice.deleteAllPdfs()
+    // MARK: - Delete Alert Text
+    private var deleteAlertTitle: String {
+        if invoicesToDelete.count == 1 {
+            return "Factuur verwijderen"
+        } else {
+            return "\(invoicesToDelete.count) facturen verwijderen"
+        }
+    }
 
-        // Unlink time entries
-        if let entries = invoice.timeEntries {
-            for entry in entries {
-                entry.isInvoiced = false
-                entry.factuurnummer = nil
-                entry.invoice = nil
+    private var deleteAlertMessage: String {
+        if invoicesToDelete.count == 1, let invoice = invoicesToDelete.first {
+            return "Weet je zeker dat je factuur \(invoice.factuurnummer) wilt verwijderen? Dit verwijdert ook alle bijbehorende PDF bestanden."
+        } else {
+            let numbers = invoicesToDelete.map { $0.factuurnummer }.joined(separator: ", ")
+            return "Weet je zeker dat je \(invoicesToDelete.count) facturen wilt verwijderen? (\(numbers)) Dit verwijdert ook alle bijbehorende PDF bestanden."
+        }
+    }
+
+    // MARK: - Multiple Selection View
+    private var multipleSelectionView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+
+            Text("\(selectedInvoices.count) facturen geselecteerd")
+                .font(.title2.weight(.medium))
+
+            // Summary of selected invoices
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Totaal bedrag:")
+                    Spacer()
+                    Text(selectedInvoices.reduce(Decimal.zero) { $0 + $1.totaalbedrag }.asCurrency)
+                        .fontWeight(.medium)
+                }
+
+                HStack {
+                    Text("Facturen:")
+                    Spacer()
+                    Text(selectedInvoices.map { $0.factuurnummer }.joined(separator: ", "))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+            }
+            .padding()
+            .background(Color.gray.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .frame(maxWidth: 400)
+
+            // Bulk actions
+            HStack(spacing: 16) {
+                Button(role: .destructive) {
+                    invoicesToDelete = selectedInvoices
+                    showDeleteAlert = true
+                } label: {
+                    Label("Verwijder selectie", systemImage: "trash")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    selectedInvoiceIDs.removeAll()
+                } label: {
+                    Label("Deselecteer alles", systemImage: "xmark.circle")
+                }
+                .buttonStyle(.bordered)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 
-        // Clear selection if this invoice was selected
-        if selectedInvoice?.id == invoice.id {
-            selectedInvoice = nil
+    // MARK: - Delete Invoices
+    private func deleteInvoices(_ invoices: [Invoice]) {
+        for invoice in invoices {
+            // Delete associated PDFs
+            invoice.deleteAllPdfs()
+
+            // Unlink time entries
+            if let entries = invoice.timeEntries {
+                for entry in entries {
+                    entry.isInvoiced = false
+                    entry.factuurnummer = nil
+                    entry.invoice = nil
+                }
+            }
+
+            // Remove from selection
+            selectedInvoiceIDs.remove(invoice.id)
+
+            // Delete the invoice
+            modelContext.delete(invoice)
         }
 
-        // Delete the invoice
-        modelContext.delete(invoice)
         try? modelContext.save()
-
-        invoiceToDelete = nil
+        invoicesToDelete = []
     }
 
     // MARK: - Summary Bar
