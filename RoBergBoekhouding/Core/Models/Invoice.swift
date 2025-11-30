@@ -1,0 +1,351 @@
+import Foundation
+import SwiftData
+
+@Model
+final class Invoice {
+    // MARK: - Properties
+    var id: UUID
+    var factuurnummer: String           // "2025-042"
+    var factuurdatum: Date
+    var vervaldatum: Date               // +14 days
+    var statusRaw: String
+    var pdfPath: String?                // Relative path to generated PDF
+    var importedPdfPath: String?        // Relative path to original imported PDF
+    var notities: String?
+    var createdAt: Date
+    var updatedAt: Date
+
+    // MARK: - Relationships
+    @Relationship(deleteRule: .nullify)
+    var client: Client?
+
+    @Relationship(deleteRule: .nullify, inverse: \TimeEntry.invoice)
+    var timeEntries: [TimeEntry]? = []
+
+    // MARK: - Computed Properties
+    var status: InvoiceStatus {
+        get { InvoiceStatus(rawValue: statusRaw) ?? .concept }
+        set { statusRaw = newValue.rawValue }
+    }
+
+    /// Total hours on this invoice
+    var totaalUren: Decimal {
+        guard let entries = timeEntries else { return 0 }
+        return entries.reduce(0) { $0 + $1.uren }
+    }
+
+    /// Total amount for hours
+    var totaalUrenBedrag: Decimal {
+        guard let entries = timeEntries else { return 0 }
+        return entries.reduce(0) { $0 + $1.totaalbedragUren }
+    }
+
+    /// Total kilometers on this invoice
+    var totaalKilometers: Int {
+        guard let entries = timeEntries else { return 0 }
+        return entries.reduce(0) { $0 + $1.totaalKilometers }
+    }
+
+    /// Total amount for kilometers
+    var totaalKmBedrag: Decimal {
+        guard let entries = timeEntries else { return 0 }
+        return entries.reduce(0) { $0 + $1.totaalbedragKm }
+    }
+
+    /// Grand total (hours + km)
+    var totaalbedrag: Decimal {
+        totaalUrenBedrag + totaalKmBedrag
+    }
+
+    /// Number of line items
+    var aantalRegels: Int {
+        timeEntries?.count ?? 0
+    }
+
+    /// Formatted invoice date
+    var factuurdatumFormatted: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd-MM-yyyy"
+        formatter.locale = Locale(identifier: "nl_NL")
+        return formatter.string(from: factuurdatum)
+    }
+
+    /// Formatted due date
+    var vervaldatumFormatted: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd-MM-yyyy"
+        formatter.locale = Locale(identifier: "nl_NL")
+        return formatter.string(from: vervaldatum)
+    }
+
+    /// Days until due (or past due if negative)
+    var daysUntilDue: Int {
+        let calendar = Calendar.current
+        let now = calendar.startOfDay(for: Date())
+        let due = calendar.startOfDay(for: vervaldatum)
+        return calendar.dateComponents([.day], from: now, to: due).day ?? 0
+    }
+
+    /// Is this invoice overdue?
+    var isOverdue: Bool {
+        status == .verzonden && daysUntilDue < 0
+    }
+
+    /// Date range of entries on this invoice
+    var dateRange: String {
+        guard let entries = timeEntries, !entries.isEmpty else { return "" }
+        let sorted = entries.sorted { $0.datum < $1.datum }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd-MM"
+        formatter.locale = Locale(identifier: "nl_NL")
+
+        if let first = sorted.first, let last = sorted.last {
+            if Calendar.current.isDate(first.datum, inSameDayAs: last.datum) {
+                return formatter.string(from: first.datum)
+            }
+            return "\(formatter.string(from: first.datum)) - \(formatter.string(from: last.datum))"
+        }
+        return ""
+    }
+
+    // MARK: - PDF Properties
+
+    /// Whether any PDF is available (generated or imported)
+    var hasPdf: Bool {
+        hasGeneratedPdf || hasImportedPdf
+    }
+
+    /// Whether a generated PDF exists
+    var hasGeneratedPdf: Bool {
+        guard let path = pdfPath, !path.isEmpty else { return false }
+        return DocumentStorageService.shared.documentExists(at: path)
+    }
+
+    /// Whether an imported PDF exists
+    var hasImportedPdf: Bool {
+        guard let path = importedPdfPath, !path.isEmpty else { return false }
+        return DocumentStorageService.shared.documentExists(at: path)
+    }
+
+    /// Get the full URL to the generated PDF
+    func generatedPdfURL(customBasePath: String? = nil) -> URL? {
+        guard let path = pdfPath else { return nil }
+        return DocumentStorageService.shared.url(for: path, customBasePath: customBasePath)
+    }
+
+    /// Get the full URL to the imported PDF
+    func importedPdfURL(customBasePath: String? = nil) -> URL? {
+        guard let path = importedPdfPath else { return nil }
+        return DocumentStorageService.shared.url(for: path, customBasePath: customBasePath)
+    }
+
+    /// Open the generated PDF in the default viewer
+    @discardableResult
+    func openGeneratedPdf(customBasePath: String? = nil) -> Bool {
+        guard let path = pdfPath else { return false }
+        return DocumentStorageService.shared.openPDF(at: path, customBasePath: customBasePath)
+    }
+
+    /// Open the imported PDF in the default viewer
+    @discardableResult
+    func openImportedPdf(customBasePath: String? = nil) -> Bool {
+        guard let path = importedPdfPath else { return false }
+        return DocumentStorageService.shared.openPDF(at: path, customBasePath: customBasePath)
+    }
+
+    // MARK: - PDF Deletion
+
+    /// Delete the generated PDF file and clear the path
+    func deleteGeneratedPdf(customBasePath: String? = nil) throws {
+        guard let path = pdfPath else { return }
+        try DocumentStorageService.shared.deletePDF(at: path, customBasePath: customBasePath)
+        pdfPath = nil
+        updateTimestamp()
+    }
+
+    /// Delete the imported PDF file and clear the path
+    func deleteImportedPdf(customBasePath: String? = nil) throws {
+        guard let path = importedPdfPath else { return }
+        try DocumentStorageService.shared.deletePDF(at: path, customBasePath: customBasePath)
+        importedPdfPath = nil
+        updateTimestamp()
+    }
+
+    /// Delete all associated PDF files
+    func deleteAllPdfs(customBasePath: String? = nil) {
+        try? deleteGeneratedPdf(customBasePath: customBasePath)
+        try? deleteImportedPdf(customBasePath: customBasePath)
+    }
+
+    // MARK: - Initializer
+    init(
+        id: UUID = UUID(),
+        factuurnummer: String,
+        factuurdatum: Date = Date(),
+        betalingstermijn: Int = 14,
+        status: InvoiceStatus = .concept,
+        client: Client? = nil,
+        notities: String? = nil
+    ) {
+        self.id = id
+        self.factuurnummer = factuurnummer
+        self.factuurdatum = factuurdatum
+        self.vervaldatum = Calendar.current.date(byAdding: .day, value: betalingstermijn, to: factuurdatum) ?? factuurdatum
+        self.statusRaw = status.rawValue
+        self.client = client
+        self.notities = notities
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+
+    // MARK: - Methods
+    func updateTimestamp() {
+        updatedAt = Date()
+    }
+
+    /// Add time entries to this invoice
+    func addTimeEntries(_ entries: [TimeEntry]) {
+        for entry in entries {
+            entry.markAsInvoiced(withNumber: factuurnummer, invoice: self)
+        }
+        if timeEntries == nil {
+            timeEntries = entries
+        } else {
+            timeEntries?.append(contentsOf: entries)
+        }
+        updateTimestamp()
+    }
+
+    /// Update invoice status
+    func updateStatus(_ newStatus: InvoiceStatus) {
+        status = newStatus
+        updateTimestamp()
+    }
+
+    /// Mark invoice as paid
+    func markAsPaid() {
+        updateStatus(.betaald)
+    }
+
+    /// Mark invoice as sent
+    func markAsSent() {
+        updateStatus(.verzonden)
+    }
+
+    /// Generate invoice line items for display
+    var lineItems: [InvoiceLineItem] {
+        guard let entries = timeEntries else { return [] }
+
+        var items: [InvoiceLineItem] = []
+
+        for entry in entries.sorted(by: { $0.datum < $1.datum }) {
+            // Hours line
+            items.append(InvoiceLineItem(
+                datum: entry.datumShort,
+                omschrijving: entry.activiteit,
+                eenheid: "uur",
+                aantal: entry.uren,
+                tarief: entry.uurtarief,
+                bedrag: entry.totaalbedragUren
+            ))
+
+            // Kilometers line (if any)
+            if entry.totaalKilometers > 0 {
+                items.append(InvoiceLineItem(
+                    datum: entry.datumShort,
+                    omschrijving: "Reiskosten \(entry.locatie)",
+                    eenheid: "km",
+                    aantal: Decimal(entry.totaalKilometers),
+                    tarief: entry.kilometertarief,
+                    bedrag: entry.totaalbedragKm
+                ))
+            }
+        }
+
+        return items
+    }
+}
+
+// MARK: - Invoice Line Item (for display)
+struct InvoiceLineItem: Identifiable {
+    let id = UUID()
+    let datum: String
+    let omschrijving: String
+    let eenheid: String
+    let aantal: Decimal
+    let tarief: Decimal
+    let bedrag: Decimal
+}
+
+// MARK: - Invoice Number Generator
+extension Invoice {
+    /// Generate next invoice number for a year
+    static func nextInvoiceNumber(year: Int, lastNumber: Int) -> String {
+        let nextNum = lastNumber + 1
+        return String(format: "%d-%03d", year, nextNum)
+    }
+
+    /// Extract year and number from invoice number
+    static func parseInvoiceNumber(_ number: String) -> (year: Int, number: Int)? {
+        let parts = number.split(separator: "-")
+        guard parts.count == 2,
+              let year = Int(parts[0]),
+              let num = Int(parts[1]) else {
+            return nil
+        }
+        return (year, num)
+    }
+}
+
+// MARK: - Sample Data
+extension Invoice {
+    static func sampleInvoice(for client: Client, entries: [TimeEntry]) -> Invoice {
+        let invoice = Invoice(
+            factuurnummer: "2025-001",
+            status: .concept,
+            client: client
+        )
+        invoice.addTimeEntries(entries)
+        return invoice
+    }
+}
+
+// MARK: - Filtering
+extension [Invoice] {
+    /// Sort by date descending
+    var sortedByDate: [Invoice] {
+        sorted { $0.factuurdatum > $1.factuurdatum }
+    }
+
+    /// Filter by status
+    func filterByStatus(_ status: InvoiceStatus) -> [Invoice] {
+        filter { $0.status == status }
+    }
+
+    /// Filter by year
+    func filterByYear(_ year: Int) -> [Invoice] {
+        let calendar = Calendar.current
+        return filter { calendar.component(.year, from: $0.factuurdatum) == year }
+    }
+
+    /// Total amount
+    var totalAmount: Decimal {
+        reduce(0) { $0 + $1.totaalbedrag }
+    }
+
+    /// Total paid amount
+    var totalPaid: Decimal {
+        filterByStatus(.betaald).reduce(0) { $0 + $1.totaalbedrag }
+    }
+
+    /// Total outstanding amount
+    var totalOutstanding: Decimal {
+        filter { $0.status == .verzonden || $0.status == .herinnering }
+            .reduce(0) { $0 + $1.totaalbedrag }
+    }
+
+    /// Count by status
+    func countByStatus(_ status: InvoiceStatus) -> Int {
+        filterByStatus(status).count
+    }
+}

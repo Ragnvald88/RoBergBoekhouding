@@ -1,0 +1,354 @@
+import SwiftUI
+import SwiftData
+
+struct TimeEntryFormView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    @Query(sort: \Client.bedrijfsnaam) private var clients: [Client]
+    @Query private var settings: [BusinessSettings]
+
+    let entry: TimeEntry?
+
+    // Form State
+    @State private var datum: Date = Date()
+    @State private var selectedClient: Client?
+    @State private var code: String = "WDAGPRAKTIJK_70"
+    @State private var activiteit: String = "Waarneming Dagpraktijk"
+    @State private var locatie: String = ""
+    @State private var uren: Decimal = 9.00
+    @State private var retourafstand: Int = 0
+    @State private var visiteKm: Decimal = 0
+    @State private var uurtarief: Decimal = 70.00
+    @State private var kmtarief: Decimal = 0.23
+    @State private var isBillable: Bool = true
+    @State private var opmerkingen: String = ""
+
+    private var isEditing: Bool { entry != nil }
+
+    private var totaalUren: Decimal { uren * uurtarief }
+    private var totaalKm: Decimal { (Decimal(retourafstand) + visiteKm) * kmtarief }
+    private var totaal: Decimal { isBillable ? (totaalUren + totaalKm) : 0 }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            header
+
+            Divider()
+
+            // Form Content
+            Form {
+                // Date & Client Section
+                Section("Basisgegevens") {
+                    DatePicker("Datum", selection: $datum, displayedComponents: .date)
+                        .environment(\.locale, Locale(identifier: "nl_NL"))
+
+                    Picker("Klant", selection: $selectedClient) {
+                        Text("Selecteer klant...").tag(nil as Client?)
+                        ForEach(clients.filter { $0.isActive }) { client in
+                            Text(client.displayName).tag(client as Client?)
+                        }
+                    }
+                    .onChange(of: selectedClient) { _, newClient in
+                        applyClientDefaults(newClient)
+                    }
+
+                    Picker("Activiteit", selection: $code) {
+                        ForEach(ActivityCode.allCases, id: \.rawValue) { activity in
+                            Text(activity.displayName).tag(activity.rawValue)
+                        }
+                    }
+                    .onChange(of: code) { _, newCode in
+                        applyActivityDefaults(newCode)
+                    }
+
+                    TextField("Locatie", text: $locatie)
+                }
+
+                // Hours & Rates Section
+                Section("Uren en Tarieven") {
+                    HStack {
+                        Text("Uren")
+                        Spacer()
+                        TextField("Uren", value: $uren, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                            .multilineTextAlignment(.trailing)
+                    }
+
+                    HStack {
+                        Text("Uurtarief")
+                        Spacer()
+                        TextField("Tarief", value: $uurtarief, format: .currency(code: "EUR"))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+                            .multilineTextAlignment(.trailing)
+                    }
+
+                    Toggle("Factureerbaar", isOn: $isBillable)
+                }
+
+                // Kilometers Section
+                Section("Kilometers") {
+                    HStack {
+                        Text("Retourafstand")
+                        Spacer()
+                        TextField("km", value: $retourafstand, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                            .multilineTextAlignment(.trailing)
+                        Text("km")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Text("Extra visitekilometers")
+                        Spacer()
+                        TextField("km", value: $visiteKm, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                            .multilineTextAlignment(.trailing)
+                        Text("km")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack {
+                        Text("Kilometertarief")
+                        Spacer()
+                        TextField("Tarief", value: $kmtarief, format: .currency(code: "EUR"))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+
+                // Notes Section
+                Section("Opmerkingen") {
+                    TextEditor(text: $opmerkingen)
+                        .frame(height: 60)
+                }
+
+                // Calculation Preview
+                Section("Berekening") {
+                    calculationPreview
+                }
+            }
+            .formStyle(.grouped)
+
+            Divider()
+
+            // Footer with buttons
+            footer
+        }
+        .frame(width: 500, height: 700)
+        .onAppear {
+            if let entry {
+                loadEntry(entry)
+            } else {
+                applyDefaults()
+            }
+        }
+    }
+
+    // MARK: - Header
+    private var header: some View {
+        HStack {
+            Text(isEditing ? "Urenregistratie bewerken" : "Nieuwe urenregistratie")
+                .font(.headline)
+            Spacer()
+            Button("Annuleren") {
+                dismiss()
+            }
+            .keyboardShortcut(.escape, modifiers: [])
+        }
+        .padding()
+    }
+
+    // MARK: - Calculation Preview
+    private var calculationPreview: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("Uren")
+                Spacer()
+                Text("\(uren.asDecimal) x \(uurtarief.asCurrency)")
+                    .foregroundStyle(.secondary)
+                Text("=")
+                Text(totaalUren.asCurrency)
+                    .monospacedDigit()
+            }
+
+            HStack {
+                Text("Kilometers")
+                Spacer()
+                Text("\(retourafstand + Int(truncating: visiteKm as NSDecimalNumber)) x \(kmtarief.asCurrency)")
+                    .foregroundStyle(.secondary)
+                Text("=")
+                Text(totaalKm.asCurrency)
+                    .monospacedDigit()
+            }
+
+            Divider()
+
+            HStack {
+                Text("Totaal")
+                    .fontWeight(.semibold)
+                Spacer()
+                Text(totaal.asCurrency)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(isBillable ? .primary : .secondary)
+            }
+
+            if !isBillable {
+                Text("Niet factureerbaar")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
+    // MARK: - Footer
+    private var footer: some View {
+        HStack {
+            if isEditing {
+                Button("Verwijderen", role: .destructive) {
+                    deleteEntry()
+                }
+            }
+
+            Spacer()
+
+            Button("Opslaan") {
+                saveEntry()
+            }
+            .keyboardShortcut(.return, modifiers: .command)
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
+    }
+
+    // MARK: - Methods
+
+    private func applyDefaults() {
+        if let defaultSettings = settings.first {
+            uurtarief = defaultSettings.standaardUurtariefDag
+            kmtarief = defaultSettings.standaardKilometertarief
+        }
+    }
+
+    private func applyClientDefaults(_ client: Client?) {
+        guard let client else { return }
+        uurtarief = client.standaardUurtarief
+        kmtarief = client.standaardKmTarief
+        retourafstand = client.afstandRetour
+        locatie = extractCity(from: client.postcodeplaats)
+
+        // Update code based on client type
+        switch client.clientType {
+        case .dagpraktijk:
+            code = "WDAGPRAKTIJK_70"
+            activiteit = "Waarneming Dagpraktijk"
+            isBillable = true
+        case .anwDienst:
+            code = "ANW_GR_WEEKEND_DAG"
+            activiteit = "ANW Dienst"
+            uurtarief = 124.00
+            isBillable = true
+        case .administratie:
+            code = "Admin"
+            activiteit = "Administratie"
+            uurtarief = 0
+            kmtarief = 0
+            retourafstand = 0
+            isBillable = false
+        }
+    }
+
+    private func applyActivityDefaults(_ code: String) {
+        guard let activity = ActivityCode(rawValue: code) else { return }
+        activiteit = activity.displayName
+        uurtarief = activity.hourlyRate
+        isBillable = activity.isBillable
+
+        if !isBillable {
+            retourafstand = 0
+            locatie = "Thuis"
+        }
+    }
+
+    private func extractCity(from postcodeplaats: String) -> String {
+        let components = postcodeplaats.components(separatedBy: " ")
+        if components.count >= 3 {
+            return components.dropFirst(2).joined(separator: " ")
+        }
+        return postcodeplaats
+    }
+
+    private func loadEntry(_ entry: TimeEntry) {
+        datum = entry.datum
+        selectedClient = entry.client
+        code = entry.code
+        activiteit = entry.activiteit
+        locatie = entry.locatie
+        uren = entry.uren
+        retourafstand = entry.retourafstandWoonWerk
+        visiteKm = entry.visiteKilometers ?? 0
+        uurtarief = entry.uurtarief
+        kmtarief = entry.kilometertarief
+        isBillable = entry.isBillable
+        opmerkingen = entry.opmerkingen ?? ""
+    }
+
+    private func saveEntry() {
+        if let entry {
+            // Update existing
+            entry.datum = datum
+            entry.client = selectedClient
+            entry.code = code
+            entry.activiteit = activiteit
+            entry.locatie = locatie
+            entry.uren = uren
+            entry.retourafstandWoonWerk = retourafstand
+            entry.visiteKilometers = visiteKm > 0 ? visiteKm : nil
+            entry.uurtarief = uurtarief
+            entry.kilometertarief = kmtarief
+            entry.isBillable = isBillable
+            entry.opmerkingen = opmerkingen.isEmpty ? nil : opmerkingen
+            entry.updateTimestamp()
+        } else {
+            // Create new
+            let newEntry = TimeEntry(
+                datum: datum,
+                code: code,
+                activiteit: activiteit,
+                locatie: locatie,
+                uren: uren,
+                visiteKilometers: visiteKm > 0 ? visiteKm : nil,
+                retourafstandWoonWerk: retourafstand,
+                uurtarief: uurtarief,
+                kilometertarief: kmtarief,
+                opmerkingen: opmerkingen.isEmpty ? nil : opmerkingen,
+                isBillable: isBillable,
+                client: selectedClient
+            )
+            modelContext.insert(newEntry)
+        }
+
+        try? modelContext.save()
+        dismiss()
+    }
+
+    private func deleteEntry() {
+        guard let entry else { return }
+        modelContext.delete(entry)
+        try? modelContext.save()
+        dismiss()
+    }
+}
+
+// MARK: - Preview
+#Preview {
+    TimeEntryFormView(entry: nil)
+        .modelContainer(for: [Client.self, TimeEntry.self, Invoice.self, Expense.self, BusinessSettings.self], inMemory: true)
+}

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factuur {{factuurnummer}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #333;
+            padding: 40px;
+            max-width: 210mm;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            font-size: 28pt;
+            font-weight: bold;
+            color: #2563eb;
+        }
+
+        .subtitle {
+            font-size: 14pt;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .contact-info {
+            font-size: 10pt;
+            color: #666;
+            margin-top: 16px;
+            line-height: 1.6;
+        }
+
+        .invoice-meta {
+            text-align: right;
+        }
+
+        .invoice-title {
+            font-size: 24pt;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 16px;
+        }
+
+        .meta-table {
+            font-size: 10pt;
+            border-collapse: collapse;
+        }
+
+        .meta-table td {
+            padding: 2px 0;
+        }
+
+        .meta-table td:first-child {
+            color: #666;
+            padding-right: 16px;
+        }
+
+        .address-block {
+            margin: 40px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .address-label {
+            font-size: 10pt;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .address-content {
+            font-size: 11pt;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+        }
+
+        .items-table th {
+            background: #f1f5f9;
+            padding: 12px 8px;
+            text-align: left;
+            font-size: 10pt;
+            font-weight: 600;
+            color: #64748b;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .items-table th:last-child,
+        .items-table td:last-child {
+            text-align: right;
+        }
+
+        .items-table th:nth-child(4),
+        .items-table th:nth-child(5),
+        .items-table td:nth-child(4),
+        .items-table td:nth-child(5) {
+            text-align: right;
+        }
+
+        .items-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 10pt;
+        }
+
+        .items-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .totals {
+            margin-top: 24px;
+            margin-left: auto;
+            width: 280px;
+        }
+
+        .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 11pt;
+        }
+
+        .totals-row.subtotal {
+            border-top: 1px solid #e2e8f0;
+            padding-top: 12px;
+        }
+
+        .totals-row.grand-total {
+            border-top: 2px solid #333;
+            padding-top: 12px;
+            font-size: 14pt;
+            font-weight: bold;
+        }
+
+        .footer {
+            margin-top: 60px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            font-size: 10pt;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .no-btw {
+            margin-top: 16px;
+            font-size: 9pt;
+            color: #94a3b8;
+            font-style: italic;
+        }
+
+        @media print {
+            body {
+                padding: 0;
+            }
+
+            .address-block {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .items-table th {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <div class="logo">RoBerg</div>
+            <div class="subtitle">huisartswaarnemer</div>
+            <div class="contact-info">
+                {{bedrijfsadres}}<br>
+                {{postcodeplaats}}<br><br>
+                Tel. {{telefoon}}<br>
+                Mail: {{email}}<br>
+                KvK: {{kvknummer}}<br>
+                Bank: {{bank}}<br>
+                IBAN: {{iban}}
+            </div>
+        </div>
+        <div class="invoice-meta">
+            <div class="invoice-title">FACTUUR</div>
+            <table class="meta-table">
+                <tr>
+                    <td>Factuurnummer:</td>
+                    <td><strong>{{factuurnummer}}</strong></td>
+                </tr>
+                <tr>
+                    <td>Factuurdatum:</td>
+                    <td>{{factuurdatum}}</td>
+                </tr>
+                <tr>
+                    <td>Vervaldatum:</td>
+                    <td>{{vervaldatum}}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <div class="address-block">
+        <div class="address-label">Factuuradres:</div>
+        <div class="address-content">
+            {{klant_contactpersoon}}<br>
+            {{klant_bedrijfsnaam}}<br>
+            {{klant_adres}}<br>
+            {{klant_postcodeplaats}}
+        </div>
+    </div>
+
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>Datum</th>
+                <th>Omschrijving</th>
+                <th>Eenheid</th>
+                <th>Aantal</th>
+                <th>Tarief</th>
+                <th>Bedrag</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{line_items}}
+        </tbody>
+    </table>
+
+    <div class="totals">
+        <div class="totals-row">
+            <span>Totaal uren</span>
+            <span>{{totaal_uren}}</span>
+        </div>
+        <div class="totals-row">
+            <span>Totaal kilometerkosten</span>
+            <span>{{totaal_km}}</span>
+        </div>
+        <div class="totals-row grand-total">
+            <span>TOTAAL</span>
+            <span>{{totaal}}</span>
+        </div>
+    </div>
+
+    <div class="footer">
+        Gelieve het bovenstaand bedrag binnen {{betalingstermijn}} dagen na dagtekening over te maken op bankrekening
+        {{iban}} ten name van {{bedrijfsnaam}} onder vermelding van het factuurnummer.
+
+        <div class="no-btw">
+            Medische diensten zijn vrijgesteld van BTW op grond van artikel 11, lid 1, onderdeel g, van de Wet op de Omzetbelasting.
+        </div>
+    </div>
+</body>
+</html>

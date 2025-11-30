@@ -1,0 +1,578 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		APP001 /* RoBergBoekhoudingApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC001 /* RoBergBoekhoudingApp.swift */; };
+		APP002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC002 /* ContentView.swift */; };
+		APP003 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC003 /* AppState.swift */; };
+		CLT001 /* ClientListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC019 /* ClientListView.swift */; };
+		CLT002 /* ClientFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC020 /* ClientFormView.swift */; };
+		DSH001 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC014 /* DashboardView.swift */; };
+		DSH002 /* KPICardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC015 /* KPICardView.swift */; };
+		EXP001 /* ExpenseListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC024 /* ExpenseListView.swift */; };
+		EXP002 /* ExpenseFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC025 /* ExpenseFormView.swift */; };
+		IMP001 /* ImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC029 /* ImportView.swift */; };
+		INV001 /* InvoiceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC021 /* InvoiceListView.swift */; };
+		INV002 /* InvoiceGeneratorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC022 /* InvoiceGeneratorView.swift */; };
+		INV003 /* InvoicePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC023 /* InvoicePreviewView.swift */; };
+		MOD001 /* Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC004 /* Client.swift */; };
+		MOD002 /* TimeEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC005 /* TimeEntry.swift */; };
+		MOD003 /* Invoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC006 /* Invoice.swift */; };
+		MOD004 /* Expense.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC007 /* Expense.swift */; };
+		MOD005 /* BusinessSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC008 /* BusinessSettings.swift */; };
+		MOD006 /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC009 /* Enums.swift */; };
+		RES001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES001F /* Assets.xcassets */; };
+		RES002 /* InvoiceTemplate.html in Resources */ = {isa = PBXBuildFile; fileRef = RES002F /* InvoiceTemplate.html */; };
+		RPT001 /* ReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC026 /* ReportsView.swift */; };
+		RPT002 /* AnnualReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC027 /* AnnualReportView.swift */; };
+		SET001 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC028 /* SettingsView.swift */; };
+		SHR001 /* PDFViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC032 /* PDFViewerView.swift */; };
+		SVC001 /* CSVImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC011 /* CSVImportService.swift */; };
+		SVC002 /* PDFGenerationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC012 /* PDFGenerationService.swift */; };
+		SVC003 /* ExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC013 /* ExportService.swift */; };
+		SVC004 /* PDFInvoiceImportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC030 /* PDFInvoiceImportService.swift */; };
+		SVC005 /* DocumentStorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC031 /* DocumentStorageService.swift */; };
+		TME001 /* TimeEntryListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC016 /* TimeEntryListView.swift */; };
+		TME002 /* TimeEntryFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC017 /* TimeEntryFormView.swift */; };
+		TME003 /* WeekOverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC018 /* WeekOverviewView.swift */; };
+		UTL001 /* DutchFormatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC010 /* DutchFormatters.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		ENT001 /* RoBergBoekhouding.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RoBergBoekhouding.entitlements; sourceTree = "<group>"; };
+		PROD001 /* RoBergBoekhouding.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RoBergBoekhouding.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		RES001F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		RES002F /* InvoiceTemplate.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = InvoiceTemplate.html; sourceTree = "<group>"; };
+		SRC001 /* RoBergBoekhoudingApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoBergBoekhoudingApp.swift; sourceTree = "<group>"; };
+		SRC002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		SRC003 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		SRC004 /* Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Client.swift; sourceTree = "<group>"; };
+		SRC005 /* TimeEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeEntry.swift; sourceTree = "<group>"; };
+		SRC006 /* Invoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Invoice.swift; sourceTree = "<group>"; };
+		SRC007 /* Expense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Expense.swift; sourceTree = "<group>"; };
+		SRC008 /* BusinessSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BusinessSettings.swift; sourceTree = "<group>"; };
+		SRC009 /* Enums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Enums.swift; sourceTree = "<group>"; };
+		SRC010 /* DutchFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutchFormatters.swift; sourceTree = "<group>"; };
+		SRC011 /* CSVImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVImportService.swift; sourceTree = "<group>"; };
+		SRC012 /* PDFGenerationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFGenerationService.swift; sourceTree = "<group>"; };
+		SRC013 /* ExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportService.swift; sourceTree = "<group>"; };
+		SRC014 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		SRC015 /* KPICardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KPICardView.swift; sourceTree = "<group>"; };
+		SRC016 /* TimeEntryListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeEntryListView.swift; sourceTree = "<group>"; };
+		SRC017 /* TimeEntryFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeEntryFormView.swift; sourceTree = "<group>"; };
+		SRC018 /* WeekOverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekOverviewView.swift; sourceTree = "<group>"; };
+		SRC019 /* ClientListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientListView.swift; sourceTree = "<group>"; };
+		SRC020 /* ClientFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientFormView.swift; sourceTree = "<group>"; };
+		SRC021 /* InvoiceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvoiceListView.swift; sourceTree = "<group>"; };
+		SRC022 /* InvoiceGeneratorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvoiceGeneratorView.swift; sourceTree = "<group>"; };
+		SRC023 /* InvoicePreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvoicePreviewView.swift; sourceTree = "<group>"; };
+		SRC024 /* ExpenseListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseListView.swift; sourceTree = "<group>"; };
+		SRC025 /* ExpenseFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpenseFormView.swift; sourceTree = "<group>"; };
+		SRC026 /* ReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportsView.swift; sourceTree = "<group>"; };
+		SRC027 /* AnnualReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnualReportView.swift; sourceTree = "<group>"; };
+		SRC028 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		SRC029 /* ImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportView.swift; sourceTree = "<group>"; };
+		SRC030 /* PDFInvoiceImportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFInvoiceImportService.swift; sourceTree = "<group>"; };
+		SRC031 /* DocumentStorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentStorageService.swift; sourceTree = "<group>"; };
+		SRC032 /* PDFViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFViewerView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		FRM001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		GRP001 /* RoBergBoekhouding */ = {
+			isa = PBXGroup;
+			children = (
+				ENT001 /* RoBergBoekhouding.entitlements */,
+				GRP_APP /* App */,
+				GRP_FEATURES /* Features */,
+				GRP_CORE /* Core */,
+				GRP_RESOURCES /* Resources */,
+			);
+			path = RoBergBoekhouding;
+			sourceTree = "<group>";
+		};
+		GRP_APP /* App */ = {
+			isa = PBXGroup;
+			children = (
+				SRC001 /* RoBergBoekhoudingApp.swift */,
+				SRC002 /* ContentView.swift */,
+				SRC003 /* AppState.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		GRP_CLIENTS /* Clients */ = {
+			isa = PBXGroup;
+			children = (
+				SRC019 /* ClientListView.swift */,
+				SRC020 /* ClientFormView.swift */,
+			);
+			path = Clients;
+			sourceTree = "<group>";
+		};
+		GRP_CORE /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				GRP_MODELS /* Models */,
+				GRP_SERVICES /* Services */,
+				GRP_UTILITIES /* Utilities */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		GRP_DASHBOARD /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				SRC014 /* DashboardView.swift */,
+				SRC015 /* KPICardView.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		GRP_EXPENSES /* Expenses */ = {
+			isa = PBXGroup;
+			children = (
+				SRC024 /* ExpenseListView.swift */,
+				SRC025 /* ExpenseFormView.swift */,
+			);
+			path = Expenses;
+			sourceTree = "<group>";
+		};
+		GRP_FEATURES /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				GRP_DASHBOARD /* Dashboard */,
+				GRP_TIMETRACK /* TimeTracking */,
+				GRP_CLIENTS /* Clients */,
+				GRP_INVOICING /* Invoicing */,
+				GRP_EXPENSES /* Expenses */,
+				GRP_REPORTS /* Reports */,
+				GRP_SHARED /* Shared */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		GRP_INVOICING /* Invoicing */ = {
+			isa = PBXGroup;
+			children = (
+				SRC021 /* InvoiceListView.swift */,
+				SRC022 /* InvoiceGeneratorView.swift */,
+				SRC023 /* InvoicePreviewView.swift */,
+			);
+			path = Invoicing;
+			sourceTree = "<group>";
+		};
+		GRP_MODELS /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				SRC004 /* Client.swift */,
+				SRC005 /* TimeEntry.swift */,
+				SRC006 /* Invoice.swift */,
+				SRC007 /* Expense.swift */,
+				SRC008 /* BusinessSettings.swift */,
+				SRC009 /* Enums.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		GRP_REPORTS /* Reports */ = {
+			isa = PBXGroup;
+			children = (
+				SRC026 /* ReportsView.swift */,
+				SRC027 /* AnnualReportView.swift */,
+				SRC028 /* SettingsView.swift */,
+				SRC029 /* ImportView.swift */,
+			);
+			path = Reports;
+			sourceTree = "<group>";
+		};
+		GRP_RESOURCES /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				RES001F /* Assets.xcassets */,
+				RES002F /* InvoiceTemplate.html */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		GRP_SERVICES /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				SRC011 /* CSVImportService.swift */,
+				SRC012 /* PDFGenerationService.swift */,
+				SRC013 /* ExportService.swift */,
+				SRC030 /* PDFInvoiceImportService.swift */,
+				SRC031 /* DocumentStorageService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		GRP_SHARED /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				SRC032 /* PDFViewerView.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		GRP_TIMETRACK /* TimeTracking */ = {
+			isa = PBXGroup;
+			children = (
+				SRC016 /* TimeEntryListView.swift */,
+				SRC017 /* TimeEntryFormView.swift */,
+				SRC018 /* WeekOverviewView.swift */,
+			);
+			path = TimeTracking;
+			sourceTree = "<group>";
+		};
+		GRP_UTILITIES /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				SRC010 /* DutchFormatters.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		PRODUCTS /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				PROD001 /* RoBergBoekhouding.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		ROOT = {
+			isa = PBXGroup;
+			children = (
+				GRP001 /* RoBergBoekhouding */,
+				PRODUCTS /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		TGT001 /* RoBergBoekhouding */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFG_TGT /* Build configuration list for PBXNativeTarget "RoBergBoekhouding" */;
+			buildPhases = (
+				SRC_PHASE /* Sources */,
+				FRM001 /* Frameworks */,
+				RES_PHASE /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RoBergBoekhouding;
+			productName = RoBergBoekhouding;
+			productReference = PROD001 /* RoBergBoekhouding.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		PRJ001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 2610;
+				TargetAttributes = {
+					TGT001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = CFG_PRJ /* Build configuration list for PBXProject "RoBergBoekhouding" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = nl;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				nl,
+				Base,
+			);
+			mainGroup = ROOT;
+			productRefGroup = PRODUCTS /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				TGT001 /* RoBergBoekhouding */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		RES_PHASE /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				RES001 /* Assets.xcassets in Resources */,
+				RES002 /* InvoiceTemplate.html in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		SRC_PHASE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				APP001 /* RoBergBoekhoudingApp.swift in Sources */,
+				APP002 /* ContentView.swift in Sources */,
+				APP003 /* AppState.swift in Sources */,
+				MOD001 /* Client.swift in Sources */,
+				MOD002 /* TimeEntry.swift in Sources */,
+				MOD003 /* Invoice.swift in Sources */,
+				MOD004 /* Expense.swift in Sources */,
+				MOD005 /* BusinessSettings.swift in Sources */,
+				MOD006 /* Enums.swift in Sources */,
+				UTL001 /* DutchFormatters.swift in Sources */,
+				SVC001 /* CSVImportService.swift in Sources */,
+				SVC002 /* PDFGenerationService.swift in Sources */,
+				SVC003 /* ExportService.swift in Sources */,
+				DSH001 /* DashboardView.swift in Sources */,
+				DSH002 /* KPICardView.swift in Sources */,
+				TME001 /* TimeEntryListView.swift in Sources */,
+				TME002 /* TimeEntryFormView.swift in Sources */,
+				TME003 /* WeekOverviewView.swift in Sources */,
+				CLT001 /* ClientListView.swift in Sources */,
+				CLT002 /* ClientFormView.swift in Sources */,
+				INV001 /* InvoiceListView.swift in Sources */,
+				INV002 /* InvoiceGeneratorView.swift in Sources */,
+				INV003 /* InvoicePreviewView.swift in Sources */,
+				EXP001 /* ExpenseListView.swift in Sources */,
+				EXP002 /* ExpenseFormView.swift in Sources */,
+				RPT001 /* ReportsView.swift in Sources */,
+				RPT002 /* AnnualReportView.swift in Sources */,
+				SET001 /* SettingsView.swift in Sources */,
+				IMP001 /* ImportView.swift in Sources */,
+				SVC004 /* PDFInvoiceImportService.swift in Sources */,
+				SVC005 /* DocumentStorageService.swift in Sources */,
+				SHR001 /* PDFViewerView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		CFG_DBG /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		CFG_REL /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		CFG_TGT_DBG /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = RoBergBoekhouding/RoBergBoekhouding.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright 2025 RoBerg huisartswaarnemer";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = nl.roberg.boekhouding;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		CFG_TGT_REL /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = RoBergBoekhouding/RoBergBoekhouding.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readwrite;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright 2025 RoBerg huisartswaarnemer";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = nl.roberg.boekhouding;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		CFG_PRJ /* Build configuration list for PBXProject "RoBergBoekhouding" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFG_DBG /* Debug */,
+				CFG_REL /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CFG_TGT /* Build configuration list for PBXNativeTarget "RoBergBoekhouding" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CFG_TGT_DBG /* Debug */,
+				CFG_TGT_REL /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = PRJ001 /* Project object */;
+}
