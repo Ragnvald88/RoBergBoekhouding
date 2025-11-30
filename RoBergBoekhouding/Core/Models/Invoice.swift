@@ -64,18 +64,12 @@ final class Invoice {
 
     /// Formatted invoice date
     var factuurdatumFormatted: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd-MM-yyyy"
-        formatter.locale = Locale(identifier: "nl_NL")
-        return formatter.string(from: factuurdatum)
+        DutchDateFormatter.formatStandard(factuurdatum)
     }
 
     /// Formatted due date
     var vervaldatumFormatted: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd-MM-yyyy"
-        formatter.locale = Locale(identifier: "nl_NL")
-        return formatter.string(from: vervaldatum)
+        DutchDateFormatter.formatStandard(vervaldatum)
     }
 
     /// Days until due (or past due if negative)
@@ -95,15 +89,12 @@ final class Invoice {
     var dateRange: String {
         guard let entries = timeEntries, !entries.isEmpty else { return "" }
         let sorted = entries.sorted { $0.datum < $1.datum }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd-MM"
-        formatter.locale = Locale(identifier: "nl_NL")
 
         if let first = sorted.first, let last = sorted.last {
             if Calendar.current.isDate(first.datum, inSameDayAs: last.datum) {
-                return formatter.string(from: first.datum)
+                return DutchDateFormatter.formatShort(first.datum)
             }
-            return "\(formatter.string(from: first.datum)) - \(formatter.string(from: last.datum))"
+            return "\(DutchDateFormatter.formatShort(first.datum)) - \(DutchDateFormatter.formatShort(last.datum))"
         }
         return ""
     }

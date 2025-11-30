@@ -23,6 +23,7 @@ struct TimeEntryFormView: View {
     @State private var kmtarief: Decimal = 0.23
     @State private var isBillable: Bool = true
     @State private var opmerkingen: String = ""
+    @State private var showingDeleteAlert: Bool = false
 
     private var isEditing: Bool { entry != nil }
 
@@ -213,7 +214,7 @@ struct TimeEntryFormView: View {
         HStack {
             if isEditing {
                 Button("Verwijderen", role: .destructive) {
-                    deleteEntry()
+                    showingDeleteAlert = true
                 }
             }
 
@@ -226,6 +227,14 @@ struct TimeEntryFormView: View {
             .buttonStyle(.borderedProminent)
         }
         .padding()
+        .alert("Urenregistratie verwijderen", isPresented: $showingDeleteAlert) {
+            Button("Annuleren", role: .cancel) { }
+            Button("Verwijderen", role: .destructive) {
+                deleteEntry()
+            }
+        } message: {
+            Text("Weet je zeker dat je deze urenregistratie wilt verwijderen? Dit kan niet ongedaan worden gemaakt.")
+        }
     }
 
     // MARK: - Methods

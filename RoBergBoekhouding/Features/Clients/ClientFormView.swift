@@ -19,9 +19,31 @@ struct ClientFormView: View {
     @State private var standaardKmTarief: Decimal = 0.23
     @State private var afstandRetour: Int = 0
     @State private var isActive: Bool = true
+    @State private var showingDeleteAlert: Bool = false
 
     private var isEditing: Bool { client != nil }
     private var canSave: Bool { !bedrijfsnaam.isEmpty }
+
+    private var deleteWarningMessage: String {
+        guard let client else { return "" }
+        var message = "Weet je zeker dat je '\(client.bedrijfsnaam)' wilt verwijderen?"
+
+        let entryCount = client.timeEntries?.count ?? 0
+        let invoiceCount = client.invoices?.count ?? 0
+
+        if entryCount > 0 || invoiceCount > 0 {
+            message += "\n\nDit verwijdert ook:"
+            if entryCount > 0 {
+                message += "\n• \(entryCount) urenregistratie\(entryCount == 1 ? "" : "s")"
+            }
+            if invoiceCount > 0 {
+                message += "\n• \(invoiceCount) factu\(invoiceCount == 1 ? "ur" : "ren")"
+            }
+        }
+
+        message += "\n\nDit kan niet ongedaan worden gemaakt."
+        return message
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -124,7 +146,7 @@ struct ClientFormView: View {
         HStack {
             if isEditing {
                 Button("Verwijderen", role: .destructive) {
-                    deleteClient()
+                    showingDeleteAlert = true
                 }
             }
 
@@ -138,6 +160,14 @@ struct ClientFormView: View {
             .disabled(!canSave)
         }
         .padding()
+        .alert("Klant verwijderen", isPresented: $showingDeleteAlert) {
+            Button("Annuleren", role: .cancel) { }
+            Button("Verwijderen", role: .destructive) {
+                deleteClient()
+            }
+        } message: {
+            Text(deleteWarningMessage)
+        }
     }
 
     // MARK: - Methods

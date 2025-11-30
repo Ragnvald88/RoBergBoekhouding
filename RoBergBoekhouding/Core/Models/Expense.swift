@@ -35,26 +35,17 @@ final class Expense {
 
     /// Formatted date
     var datumFormatted: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd-MM-yyyy"
-        formatter.locale = Locale(identifier: "nl_NL")
-        return formatter.string(from: datum)
+        DutchDateFormatter.formatStandard(datum)
     }
 
     /// Short date for lists
     var datumShort: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd MMM"
-        formatter.locale = Locale(identifier: "nl_NL")
-        return formatter.string(from: datum)
+        DutchDateFormatter.formatShort(datum)
     }
 
     /// Month-year string for grouping
     var maandJaar: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM yyyy"
-        formatter.locale = Locale(identifier: "nl_NL")
-        return formatter.string(from: datum)
+        DutchDateFormatter.formatMonthYear(datum)
     }
 
     /// Display name for the expense

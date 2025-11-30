@@ -52,18 +52,12 @@ final class TimeEntry {
 
     /// Formatted date string
     var datumFormatted: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd-MM-yyyy"
-        formatter.locale = Locale(identifier: "nl_NL")
-        return formatter.string(from: datum)
+        DutchDateFormatter.formatStandard(datum)
     }
 
     /// Short date for invoice line items
     var datumShort: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "dd-MM"
-        formatter.locale = Locale(identifier: "nl_NL")
-        return formatter.string(from: datum)
+        DutchDateFormatter.formatShort(datum)
     }
 
     /// Display name for the entry

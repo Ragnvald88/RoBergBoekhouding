@@ -13,6 +13,7 @@ struct InvoicePreviewView: View {
     @State private var htmlContent: String = ""
     @State private var isSaving = false
     @State private var saveError: String?
+    @State private var saveSuccess: String?
     @State private var showingDeleteGeneratedAlert = false
     @State private var showingDeleteImportedAlert = false
 
@@ -121,6 +122,25 @@ struct InvoicePreviewView: View {
                 Text("Weet je zeker dat je de originele geïmporteerde PDF wilt verwijderen? Dit kan niet ongedaan worden gemaakt.")
             }
 
+            // Success message
+            if let success = saveSuccess {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text(success)
+                        .font(.caption)
+                    Spacer()
+                    Button("Sluiten") {
+                        saveSuccess = nil
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color.green.opacity(0.1))
+            }
+
             // Error message
             if let error = saveError {
                 HStack {
@@ -166,11 +186,13 @@ struct InvoicePreviewView: View {
 
         isSaving = true
         saveError = nil
+        saveSuccess = nil
 
         let service = PDFGenerationService(settings: businessSettings)
 
         do {
             _ = try await service.generateAndStorePDF(for: invoice, modelContext: modelContext)
+            saveSuccess = "PDF opgeslagen in app documenten"
         } catch {
             saveError = "Kon PDF niet opslaan: \(error.localizedDescription)"
         }
@@ -202,12 +224,14 @@ struct InvoicePreviewView: View {
 
         isSaving = true
         saveError = nil
+        saveSuccess = nil
 
         let service = PDFGenerationService(settings: businessSettings)
 
         do {
             // Generate, store in app documents, and export to user location
             _ = try await service.generateStoreAndExportPDF(for: invoice, to: url, modelContext: modelContext)
+            saveSuccess = "PDF geëxporteerd"
             NSWorkspace.shared.activateFileViewerSelecting([url])
         } catch {
             saveError = "Kon PDF niet opslaan: \(error.localizedDescription)"

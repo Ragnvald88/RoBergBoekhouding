@@ -19,6 +19,7 @@ struct ExpenseFormView: View {
     @State private var notities: String = ""
     @State private var receiptError: String?
     @State private var pendingReceiptURL: URL? // For new expenses - receipt to attach after save
+    @State private var showingDeleteAlert: Bool = false
 
     private var isEditing: Bool { expense != nil }
     private var canSave: Bool { !omschrijving.isEmpty && bedrag > 0 }
@@ -176,7 +177,7 @@ struct ExpenseFormView: View {
         HStack {
             if isEditing {
                 Button("Verwijderen", role: .destructive) {
-                    deleteExpense()
+                    showingDeleteAlert = true
                 }
             }
 
@@ -190,6 +191,14 @@ struct ExpenseFormView: View {
             .keyboardShortcut(.return, modifiers: .command)
         }
         .padding()
+        .alert("Uitgave verwijderen", isPresented: $showingDeleteAlert) {
+            Button("Annuleren", role: .cancel) { }
+            Button("Verwijderen", role: .destructive) {
+                deleteExpense()
+            }
+        } message: {
+            Text("Weet je zeker dat je '\(omschrijving)' wilt verwijderen? Dit kan niet ongedaan worden gemaakt.")
+        }
     }
 
     // MARK: - Methods
