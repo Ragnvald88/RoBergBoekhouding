@@ -82,6 +82,17 @@ struct InvoicePreviewView: View {
                     .help("Geïmporteerde PDF acties")
                 }
 
+                // Save to app storage button
+                if !invoice.hasGeneratedPdf {
+                    Button("Opslaan") {
+                        Task {
+                            await savePDFToApp()
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isSaving)
+                }
+
                 Button("Exporteer PDF") {
                     exportPDF()
                 }
@@ -144,6 +155,27 @@ struct InvoicePreviewView: View {
         guard let businessSettings = settings.first else { return }
         let service = PDFGenerationService(settings: businessSettings)
         htmlContent = service.generateInvoiceHTML(for: invoice)
+    }
+
+    @MainActor
+    private func savePDFToApp() async {
+        guard let businessSettings = settings.first else {
+            saveError = "Bedrijfsinstellingen niet gevonden"
+            return
+        }
+
+        isSaving = true
+        saveError = nil
+
+        let service = PDFGenerationService(settings: businessSettings)
+
+        do {
+            _ = try await service.generateAndStorePDF(for: invoice, modelContext: modelContext)
+        } catch {
+            saveError = "Kon PDF niet opslaan: \(error.localizedDescription)"
+        }
+
+        isSaving = false
     }
 
     private func exportPDF() {

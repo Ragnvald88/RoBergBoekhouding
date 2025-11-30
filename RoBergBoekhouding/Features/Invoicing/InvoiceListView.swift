@@ -11,6 +11,8 @@ struct InvoiceListView: View {
     @State private var statusFilter: InvoiceStatus?
     @State private var invoicesToDelete: [Invoice] = []
     @State private var showDeleteAlert = false
+    @State private var invoiceForPDFPreview: Invoice?
+    @State private var showPDFPreview = false
 
     private var filteredInvoices: [Invoice] {
         var invoices = allInvoices.filterByYear(appState.selectedYear)
@@ -64,10 +66,17 @@ struct InvoiceListView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(filteredInvoices, id: \.id, selection: $selectedInvoiceIDs) { invoice in
-                        InvoiceRow(invoice: invoice) {
-                            invoicesToDelete = [invoice]
-                            showDeleteAlert = true
-                        }
+                        InvoiceRow(
+                            invoice: invoice,
+                            onDelete: {
+                                invoicesToDelete = [invoice]
+                                showDeleteAlert = true
+                            },
+                            onShowPDF: {
+                                invoiceForPDFPreview = invoice
+                                showPDFPreview = true
+                            }
+                        )
                         .tag(invoice.id)
                     }
                     .listStyle(.plain)
@@ -124,6 +133,11 @@ struct InvoiceListView: View {
             }
         } message: {
             Text(deleteAlertMessage)
+        }
+        .sheet(isPresented: $showPDFPreview) {
+            if let invoice = invoiceForPDFPreview {
+                InvoicePreviewView(invoice: invoice)
+            }
         }
     }
 
@@ -326,8 +340,10 @@ struct InvoiceListView: View {
 
 // MARK: - Invoice Row
 struct InvoiceRow: View {
+    @Environment(\.modelContext) private var modelContext
     let invoice: Invoice
     let onDelete: () -> Void
+    let onShowPDF: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -374,11 +390,18 @@ struct InvoiceRow: View {
         }
         .padding(.vertical, 4)
         .contextMenu {
+            // PDF Preview - always available
+            Button {
+                onShowPDF()
+            } label: {
+                Label("PDF voorvertoning", systemImage: "doc.richtext")
+            }
+
             if invoice.hasGeneratedPdf {
                 Button {
                     invoice.openGeneratedPdf()
                 } label: {
-                    Label("Open PDF", systemImage: "doc.fill")
+                    Label("Open opgeslagen PDF", systemImage: "doc.fill")
                 }
             }
 
@@ -388,6 +411,22 @@ struct InvoiceRow: View {
                 } label: {
                     Label("Open originele import", systemImage: "arrow.down.doc.fill")
                 }
+            }
+
+            Divider()
+
+            // Status change submenu
+            Menu {
+                ForEach(invoice.status.otherStatuses, id: \.self) { status in
+                    Button {
+                        invoice.updateStatus(status)
+                        try? modelContext.save()
+                    } label: {
+                        Label(status.displayName, systemImage: statusIcon(status))
+                    }
+                }
+            } label: {
+                Label("Status wijzigen", systemImage: "flag")
             }
 
             Divider()
@@ -407,6 +446,16 @@ struct InvoiceRow: View {
         case .betaald: return .green
         case .herinnering: return .red
         case .oninbaar: return .purple
+        }
+    }
+
+    private func statusIcon(_ status: InvoiceStatus) -> String {
+        switch status {
+        case .concept: return "doc"
+        case .verzonden: return "paperplane"
+        case .betaald: return "checkmark.circle"
+        case .herinnering: return "exclamationmark.triangle"
+        case .oninbaar: return "xmark.circle"
         }
     }
 }
@@ -577,39 +626,44 @@ struct InvoiceDetailView: View {
             Text("Regels")
                 .font(.headline)
 
-            // Header
-            HStack {
-                Text("Datum")
-                    .frame(width: 60, alignment: .leading)
-                Text("Omschrijving")
-                Spacer()
-                Text("Aantal")
-                    .frame(width: 60, alignment: .trailing)
-                Text("Tarief")
-                    .frame(width: 80, alignment: .trailing)
-                Text("Bedrag")
-                    .frame(width: 90, alignment: .trailing)
-            }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
+            if invoice.lineItems.isEmpty {
+                Text("Geen regels gevonden")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 8)
+            } else {
+                // Responsive table using Grid
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
+                    // Header row
+                    GridRow {
+                        Text("Datum")
+                        Text("Omschrijving")
+                        Text("Aantal")
+                            .gridColumnAlignment(.trailing)
+                        Text("Bedrag")
+                            .gridColumnAlignment(.trailing)
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
 
-            Divider()
+                    Divider()
+                        .gridCellColumns(4)
 
-            // Items
-            ForEach(invoice.lineItems) { item in
-                HStack {
-                    Text(item.datum)
-                        .frame(width: 60, alignment: .leading)
-                    Text(item.omschrijving)
-                    Spacer()
-                    Text("\(item.aantal.asDecimal) \(item.eenheid)")
-                        .frame(width: 60, alignment: .trailing)
-                    Text(item.tarief.asCurrency)
-                        .frame(width: 80, alignment: .trailing)
-                    Text(item.bedrag.asCurrency)
-                        .frame(width: 90, alignment: .trailing)
+                    // Data rows
+                    ForEach(invoice.lineItems) { item in
+                        GridRow {
+                            Text(item.datum)
+                                .font(.caption)
+                            Text(item.omschrijving)
+                                .font(.subheadline)
+                                .lineLimit(2)
+                            Text("\(item.aantal.asDecimal) \(item.eenheid)")
+                                .font(.caption.monospacedDigit())
+                            Text(item.bedrag.asCurrency)
+                                .font(.subheadline.weight(.medium).monospacedDigit())
+                        }
+                    }
                 }
-                .font(.subheadline)
             }
         }
     }
