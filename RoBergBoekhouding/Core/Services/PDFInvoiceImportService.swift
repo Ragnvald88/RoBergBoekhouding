@@ -222,13 +222,49 @@ class PDFInvoiceImportService {
             throw PDFImportError.cannotParseInvoiceNumber
         }
 
-        // Extract invoice date
+        // Extract invoice date - PDF text extraction may split label and date
         var invoiceDate = Date()
-        for line in lines {
-            if let match = extractPattern(from: line, pattern: "Factuurdatum:\\s*([0-9]{1,2}-[0-9]{1,2}-[0-9]{4})") {
-                if let date = parseDate(match) {
-                    invoiceDate = date
-                    break
+        var foundDate = false
+
+        for (index, line) in lines.enumerated() {
+            // Pattern 1: Date on same line as label
+            if line.lowercased().contains("factuurdatum") {
+                // Try to extract date from same line
+                if let match = extractPattern(from: line, pattern: "([0-9]{1,2}-[0-9]{1,2}-[0-9]{4})") {
+                    if let date = parseDate(match) {
+                        invoiceDate = date
+                        foundDate = true
+                        break
+                    }
+                }
+                // If not on same line, check next few lines for a date
+                for nextIndex in (index + 1)..<min(index + 3, lines.count) {
+                    let nextLine = lines[nextIndex]
+                    if let match = extractPattern(from: nextLine, pattern: "([0-9]{1,2}-[0-9]{1,2}-[0-9]{4})") {
+                        if let date = parseDate(match) {
+                            invoiceDate = date
+                            foundDate = true
+                            break
+                        }
+                    }
+                }
+                if foundDate { break }
+            }
+        }
+
+        // Fallback: look for any date pattern near the top of the document
+        if !foundDate {
+            for line in lines.prefix(30) {
+                if let match = extractPattern(from: line, pattern: "([0-9]{2}-[0-9]{2}-[0-9]{4})") {
+                    if let date = parseDate(match) {
+                        // Sanity check: date should be in reasonable range (not future, not too old)
+                        let calendar = Calendar.current
+                        let yearOfDate = calendar.component(.year, from: date)
+                        if yearOfDate >= 2020 && yearOfDate <= calendar.component(.year, from: Date()) + 1 {
+                            invoiceDate = date
+                            break
+                        }
+                    }
                 }
             }
         }
@@ -331,24 +367,55 @@ class PDFInvoiceImportService {
             }
         }
 
-        // Extract total
+        // Extract total - PRIORITY: "Te betalen bedrag" over "TOTAAL"
+        // For split invoices (deelbetaling), "Te betalen bedrag" is the actual amount
         var totalAmount: Decimal = 0
-        for line in lines {
-            if line.contains("TOTAAL") && line.contains("€") {
+        var foundTeBetalen = false
+
+        // First pass: look for "Te betalen bedrag" (highest priority)
+        // PDF text extraction may put label and value on same or different lines
+        for (index, line) in lines.enumerated() {
+            if line.lowercased().contains("te betalen bedrag") {
+                // Try to extract amount from same line
                 if let amount = extractCurrency(from: line) {
                     totalAmount = amount
+                    foundTeBetalen = true
                     break
                 }
+                // If not on same line, check next few lines for euro amount
+                for nextIndex in (index + 1)..<min(index + 4, lines.count) {
+                    let nextLine = lines[nextIndex]
+                    if let amount = extractCurrency(from: nextLine) {
+                        totalAmount = amount
+                        foundTeBetalen = true
+                        break
+                    }
+                    // Stop if we hit another label
+                    if nextLine.contains(":") && !nextLine.contains("€") {
+                        break
+                    }
+                }
+                if foundTeBetalen { break }
             }
-            if let match = extractPattern(from: line, pattern: "Te betalen bedrag:\\s*€\\s*([0-9.,]+)") {
-                if let amount = parseDecimal(match) {
-                    totalAmount = amount
-                    break
+        }
+
+        // Second pass: only if "Te betalen bedrag" not found, look for TOTAAL
+        if !foundTeBetalen {
+            for line in lines {
+                if (line.contains("TOTAAL") || line.contains("Totaal")) && line.contains("€") {
+                    // Skip lines that are subtotals (like "Totaal uren")
+                    if line.contains("uren") || line.contains("km") || line.contains("kilometer") {
+                        continue
+                    }
+                    if let amount = extractCurrency(from: line) {
+                        totalAmount = amount
+                        break
+                    }
                 }
             }
         }
 
-        // Calculate total from line items if not found
+        // Calculate total from line items if still not found
         if totalAmount == 0 {
             totalAmount = lineItems.reduce(0) { $0 + $1.total }
         }
@@ -539,21 +606,47 @@ class PDFInvoiceImportService {
     }
 
     private func parseDecimal(_ string: String) -> Decimal? {
-        let cleaned = string
+        var cleaned = string
             .replacingOccurrences(of: "€", with: "")
             .replacingOccurrences(of: " ", with: "")
-            .replacingOccurrences(of: ".", with: "")
-            .replacingOccurrences(of: ",", with: ".")
             .trimmingCharacters(in: .whitespaces)
+
+        // Dutch format: 1.234,56 (period = thousands, comma = decimal)
+        // Check if there's both a period AND a comma
+        let hasPeriod = cleaned.contains(".")
+        let hasComma = cleaned.contains(",")
+
+        if hasPeriod && hasComma {
+            // Both present: period is thousands separator, comma is decimal
+            // e.g., "2.195,67" -> "2195.67"
+            cleaned = cleaned.replacingOccurrences(of: ".", with: "")
+            cleaned = cleaned.replacingOccurrences(of: ",", with: ".")
+        } else if hasComma && !hasPeriod {
+            // Only comma: it's the decimal separator
+            // e.g., "505,00" -> "505.00"
+            cleaned = cleaned.replacingOccurrences(of: ",", with: ".")
+        }
+        // If only period or neither, the string is already in a parseable format
 
         return Decimal(string: cleaned)
     }
 
     private func extractCurrency(from text: String) -> Decimal? {
-        // Find euro amount pattern
-        if let match = extractPattern(from: text, pattern: "€\\s*([0-9.,]+)") {
+        // Find euro amount pattern - try multiple patterns
+        // Pattern 1: € followed by number (with optional spaces)
+        if let match = extractPattern(from: text, pattern: "€\\s*([0-9][0-9.,]*)") {
             return parseDecimal(match)
         }
+
+        // Pattern 2: Just a number that looks like currency (3+ digits with comma)
+        // This catches standalone amounts like "658,70" on a line by itself
+        if text.trimmingCharacters(in: .whitespaces).contains(",") {
+            let cleaned = text.trimmingCharacters(in: .whitespaces)
+            if let match = extractPattern(from: cleaned, pattern: "^([0-9][0-9.,]*)$") {
+                return parseDecimal(match)
+            }
+        }
+
         return nil
     }
 
