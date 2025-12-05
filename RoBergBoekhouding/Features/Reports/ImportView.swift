@@ -288,29 +288,68 @@ struct ImportView: View {
 
             Divider()
 
+            // Show failed imports first with clear error messages
+            let failedResults = pdfImportResults.filter { !$0.success }
+            let successResults = pdfImportResults.filter { $0.success }
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(pdfImportResults, id: \.invoiceNumber) { result in
-                        HStack {
-                            Image(systemName: result.success ? "checkmark.circle" : "xmark.circle")
-                                .foregroundStyle(result.success ? .green : .red)
-                                .font(.caption)
-                            Text(result.invoiceNumber)
-                                .font(.caption.monospaced())
-                            if result.success {
+                    // Failed imports section
+                    if !failedResults.isEmpty {
+                        Text("Mislukt:")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.red)
+                            .padding(.top, 4)
+
+                        ForEach(failedResults, id: \.invoiceNumber) { result in
+                            HStack(alignment: .top) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.red)
+                                    .font(.caption)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(result.invoiceNumber)
+                                        .font(.caption.monospaced().weight(.medium))
+                                    Text(result.message)
+                                        .font(.caption2)
+                                        .foregroundStyle(.red)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+
+                        if !successResults.isEmpty {
+                            Divider()
+                                .padding(.vertical, 4)
+                        }
+                    }
+
+                    // Successful imports
+                    if !successResults.isEmpty {
+                        Text("Geïmporteerd:")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.green)
+
+                        ForEach(successResults, id: \.invoiceNumber) { result in
+                            HStack {
+                                Image(systemName: "checkmark.circle")
+                                    .foregroundStyle(.green)
+                                    .font(.caption)
+                                Text(result.invoiceNumber)
+                                    .font(.caption.monospaced())
                                 Text("- \(result.totalAmount.asCurrency)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                            } else {
-                                Text("- \(result.message)")
-                                    .font(.caption)
-                                    .foregroundStyle(.red)
+                                if result.timeEntriesCreated > 0 {
+                                    Text("(\(result.timeEntriesCreated) uren)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.blue)
+                                }
                             }
                         }
                     }
                 }
             }
-            .frame(maxHeight: 120)
+            .frame(maxHeight: 180)
         }
         .padding()
         .background(Color.gray.opacity(0.1))

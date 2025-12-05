@@ -23,6 +23,8 @@ struct TimeEntryFormView: View {
     @State private var kmtarief: Decimal = 0.23
     @State private var isBillable: Bool = true
     @State private var isStandby: Bool = false
+    @State private var isSharedShift: Bool = false
+    @State private var verdeelfactor: Double = 1.0
     @State private var opmerkingen: String = ""
     @State private var showingDeleteAlert: Bool = false
 
@@ -99,6 +101,37 @@ struct TimeEntryFormView: View {
                         }
                     }
                     .help("Vink aan als deze uren niet meetellen voor de 1.225 uur zelfstandigenaftrek")
+
+                    Toggle(isOn: $isSharedShift) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Gedeelde dienst")
+                            Text("Meerdere praktijken betalen - uren worden naar rato verdeeld")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .help("Voor diensten waarbij meerdere praktijken betalen (bijv. HOED, vakantiewaarneming)")
+
+                    if isSharedShift {
+                        HStack {
+                            Text("Jouw aandeel")
+                            Spacer()
+                            Slider(value: $verdeelfactor, in: 0.1...1.0, step: 0.01)
+                                .frame(width: 150)
+                            Text("\(Int(verdeelfactor * 100))%")
+                                .monospacedDigit()
+                                .frame(width: 40)
+                        }
+
+                        HStack {
+                            Text("Proportionele uren")
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\((uren * Decimal(verdeelfactor)).asDecimal) van \(uren.asDecimal) uur")
+                                .font(.caption)
+                                .foregroundStyle(.blue)
+                        }
+                    }
                 }
 
                 // Kilometers Section
@@ -341,6 +374,16 @@ struct TimeEntryFormView: View {
     }
 
     private func saveEntry() {
+        // Calculate actual hours to save (apply verdeelfactor for shared shifts)
+        let actualUren = isSharedShift ? uren * Decimal(verdeelfactor) : uren
+
+        // Build notes with verdeelfactor info if shared
+        var notes = opmerkingen
+        if isSharedShift {
+            let shareNote = "Gedeelde dienst - \(Int(verdeelfactor * 100))% aandeel"
+            notes = notes.isEmpty ? shareNote : "\(notes)\n\(shareNote)"
+        }
+
         if let entry {
             // Update existing
             entry.datum = datum
@@ -348,14 +391,14 @@ struct TimeEntryFormView: View {
             entry.code = code
             entry.activiteit = activiteit
             entry.locatie = locatie
-            entry.uren = uren
+            entry.uren = actualUren
             entry.retourafstandWoonWerk = retourafstand
             entry.visiteKilometers = visiteKm > 0 ? visiteKm : nil
             entry.uurtarief = uurtarief
             entry.kilometertarief = kmtarief
             entry.isBillable = isBillable
             entry.isStandby = isStandby
-            entry.opmerkingen = opmerkingen.isEmpty ? nil : opmerkingen
+            entry.opmerkingen = notes.isEmpty ? nil : notes
             entry.updateTimestamp()
         } else {
             // Create new
@@ -364,12 +407,12 @@ struct TimeEntryFormView: View {
                 code: code,
                 activiteit: activiteit,
                 locatie: locatie,
-                uren: uren,
+                uren: actualUren,
                 visiteKilometers: visiteKm > 0 ? visiteKm : nil,
                 retourafstandWoonWerk: retourafstand,
                 uurtarief: uurtarief,
                 kilometertarief: kmtarief,
-                opmerkingen: opmerkingen.isEmpty ? nil : opmerkingen,
+                opmerkingen: notes.isEmpty ? nil : notes,
                 isBillable: isBillable,
                 isStandby: isStandby,
                 client: selectedClient

@@ -91,25 +91,29 @@ class PDFInvoiceImportService {
         var entriesCreated = 0
         var entriesSkipped = 0
 
+        // For split payment invoices, apply verdeelfactor to hours
+        let factor = parsedInvoice.verdeelfactor ?? 1
+
         for item in parsedInvoice.lineItems {
             // Check if this is an hours entry (not km)
             if item.isHoursEntry {
-                // Check for duplicate time entry (same date, same client, same hours)
+                // Calculate proportional hours for split payments
+                let proportionalHours = item.quantity * factor
+
+                // Check for duplicate time entry (same date, same client, similar hours)
                 let itemDate = item.date
                 let startOfDay = Calendar.current.startOfDay(for: itemDate)
                 guard let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay) else {
                     continue
                 }
 
-                // Check if entry already exists for this date/client/hours combination
+                // Check if entry already exists for this date/client combination
                 let clientId = client?.id
-                let itemHours = item.quantity
                 let duplicateDescriptor = FetchDescriptor<TimeEntry>(
                     predicate: #Predicate<TimeEntry> { entry in
                         entry.datum >= startOfDay &&
                         entry.datum < endOfDay &&
-                        entry.client?.id == clientId &&
-                        entry.uren == itemHours
+                        entry.client?.id == clientId
                     }
                 )
 
@@ -127,17 +131,24 @@ class PDFInvoiceImportService {
                     activityCode = "WDAGPRAKTIJK_\(Int(truncating: item.rate as NSDecimalNumber))"
                 }
 
+                // Build description - note if split payment
+                var description = item.description
+                if parsedInvoice.isSplitPayment, let vf = parsedInvoice.verdeelfactor {
+                    let percentage = Int(truncating: (vf * 100) as NSDecimalNumber)
+                    description = "\(item.description) (\(percentage)% aandeel)"
+                }
+
                 let entry = TimeEntry(
                     datum: item.date,
                     code: activityCode,
-                    activiteit: item.description,
+                    activiteit: description,
                     locatie: parsedInvoice.clientLocation,
-                    uren: item.quantity,
+                    uren: proportionalHours,  // Use proportional hours
                     visiteKilometers: nil,
                     retourafstandWoonWerk: 0, // Will be set from km entry
                     uurtarief: item.rate,
                     kilometertarief: 0.23,
-                    opmerkingen: nil,
+                    opmerkingen: parsedInvoice.isSplitPayment ? "Gedeelde dienst - verdeelfactor \(factor)" : nil,
                     isBillable: true,
                     isInvoiced: true,
                     factuurnummer: parsedInvoice.invoiceNumber,
@@ -186,6 +197,10 @@ class PDFInvoiceImportService {
 
         // Build result message
         var message = "Factuur \(parsedInvoice.invoiceNumber) geïmporteerd"
+        if parsedInvoice.isSplitPayment, let vf = parsedInvoice.verdeelfactor {
+            let percentage = Int(truncating: (vf * 100) as NSDecimalNumber)
+            message += " (gedeeld: \(percentage)%)"
+        }
         if entriesSkipped > 0 {
             message += " (\(entriesSkipped) dubbele entries overgeslagen)"
         }
@@ -498,6 +513,37 @@ class PDFInvoiceImportService {
             totalAmount = lineItems.filter { $0.isHoursEntry }.reduce(0) { $0 + $1.total }
         }
 
+        // Detect split payment (Deelbetaling) and extract verdeelfactor
+        var isSplitPayment = false
+        var verdeelfactor: Decimal?
+
+        let joinedText = lines.joined(separator: " ").lowercased()
+        if joinedText.contains("deelbetaling") || joinedText.contains("verdeelfactor") ||
+           joinedText.contains("naar rato") {
+            isSplitPayment = true
+
+            // Find the verdeelfactor for the invoice recipient
+            // Look for pattern: "ClientName ... 0,23 ... €Amount" in the split table
+            let cleanClientName = clientName.lowercased()
+                .replacingOccurrences(of: "huisartsenpraktijk", with: "")
+                .replacingOccurrences(of: "huisartspraktijk", with: "")
+                .trimmingCharacters(in: .whitespaces)
+
+            for line in lines {
+                let lowered = line.lowercased()
+                // Check if this line contains the client name (partial match)
+                if lowered.contains(cleanClientName) || cleanClientName.split(separator: " ").first.map({ lowered.contains(String($0)) }) == true {
+                    // Extract the verdeelfactor (decimal between 0 and 1)
+                    // Pattern: look for "0,XX" format
+                    if let match = extractPattern(from: line, pattern: "\\b0[,.]([0-9]{1,2})\\b") {
+                        let factorStr = "0.\(match)"
+                        verdeelfactor = Decimal(string: factorStr)
+                        break
+                    }
+                }
+            }
+        }
+
         return ParsedInvoice(
             invoiceNumber: finalInvoiceNumber,
             invoiceDate: invoiceDate,
@@ -507,7 +553,9 @@ class PDFInvoiceImportService {
             clientPostcode: clientPostcode,
             clientLocation: clientLocation,
             lineItems: lineItems,
-            totalAmount: totalAmount
+            totalAmount: totalAmount,
+            verdeelfactor: verdeelfactor,
+            isSplitPayment: isSplitPayment
         )
     }
 
@@ -520,17 +568,29 @@ class PDFInvoiceImportService {
         var lastHoursItem: ParsedLineItem?
 
         for (index, line) in lines.enumerated() {
-            // Detect table start
-            if line.contains("Datum") && (line.contains("Omschrijving") || line.contains("Tarief") || line.contains("Bedrag")) {
-                inTable = true
-                continue
+            // Detect table start - different patterns for different formats
+            if format == .formatANW_dienst {
+                // ANW format: table starts with "UREN SPECIFICATIE" or "Dienst ID"
+                if line.contains("UREN SPECIFICATIE") || line.contains("Dienst ID") {
+                    inTable = true
+                    continue
+                }
+            } else {
+                // Standard formats: "Datum" + "Omschrijving/Tarief/Bedrag"
+                if line.contains("Datum") && (line.contains("Omschrijving") || line.contains("Tarief") || line.contains("Bedrag")) {
+                    inTable = true
+                    continue
+                }
             }
 
             // Detect table end
-            if inTable && (line.contains("TOTAAL") || line.contains("Totaalbedrag") ||
-                           line.contains("Betaalinformatie") || line.contains("Vrijgesteld") ||
-                           line.contains("Gelieve deze factuur")) {
-                break
+            if inTable {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("Totaal") || line.contains("TOTAAL UREN") ||
+                   line.contains("Totaalbedrag") || line.contains("Betaalinformatie") ||
+                   line.contains("Gelieve deze factuur") {
+                    break
+                }
             }
 
             guard inTable && !line.isEmpty else { continue }
@@ -558,8 +618,13 @@ class PDFInvoiceImportService {
 
             case .formatD_dashDates:
                 // Format D: "07/01/2025  Waarneming dagpraktijk  9,00  € 77,50  € 24,84  € 722,34"
-                if let item = parseFormatD(line: line, currentDate: currentDate) {
-                    currentDate = item.date
+                // Also handle km lines on separate rows
+                let result = parseFormatD_withKm(line: line, currentDate: currentDate, lastHoursItem: lastHoursItem)
+                if let item = result.item {
+                    if item.isHoursEntry {
+                        currentDate = item.date
+                        lastHoursItem = item
+                    }
                     items.append(item)
                 }
 
@@ -781,6 +846,101 @@ class PDFInvoiceImportService {
             total: total,
             isHoursEntry: true
         )
+    }
+
+    /// Format D with km support: Handles both hours lines and separate km lines
+    private func parseFormatD_withKm(line: String, currentDate: Date?, lastHoursItem: ParsedLineItem?) -> (item: ParsedLineItem?, updatedDate: Date?) {
+        var itemDate = currentDate ?? Date()
+
+        // Check if line starts with a date
+        let hasDate = extractPattern(from: line, pattern: "^\\s*([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4})") != nil
+
+        if hasDate {
+            if let dateMatch = extractPattern(from: line, pattern: "^\\s*([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4})") {
+                if let date = parseDate(dateMatch) {
+                    itemDate = date
+                }
+            }
+        }
+
+        // Determine line type
+        let isHoursLine = line.contains("Waarneming") || line.contains("dagpraktijk")
+        let isKmLine = line.contains("Reiskosten") || line.contains("Kilometer") || line.contains("km retour")
+
+        if isHoursLine {
+            // Parse hours line
+            let currencyValues = extractCurrencyValues(from: line)
+
+            // Remove date from line before extracting quantity
+            var lineWithoutDate = line
+            if let range = line.range(of: "^\\s*[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}\\s*", options: .regularExpression) {
+                lineWithoutDate = String(line[range.upperBound...])
+            }
+
+            // Find quantity between description and first €
+            var hours: Decimal = 0
+            if let euroIndex = lineWithoutDate.firstIndex(of: "€") {
+                let beforeEuro = String(lineWithoutDate[..<euroIndex])
+                // Look for the LAST number before € (that's the quantity)
+                if let qtyMatch = extractPattern(from: beforeEuro, pattern: "([0-9]+[,.]?[0-9]*)\\s*$") {
+                    hours = parseDecimal(qtyMatch) ?? 0
+                }
+            }
+
+            guard hours > 0 && hours <= 24 else { return (nil, itemDate) }
+
+            let rate = currencyValues.first { $0 >= 50 && $0 <= 150 } ?? 77.50
+            let total = currencyValues.last ?? (hours * rate)
+
+            let item = ParsedLineItem(
+                date: itemDate,
+                description: "Waarneming dagpraktijk",
+                quantity: hours,
+                rate: rate,
+                total: total,
+                isHoursEntry: true
+            )
+            return (item, itemDate)
+
+        } else if isKmLine {
+            // Parse km line - uses date from previous hours entry if not present
+            let kmDate = hasDate ? itemDate : (lastHoursItem?.date ?? currentDate ?? Date())
+            let currencyValues = extractCurrencyValues(from: line)
+
+            // Extract km quantity - look for number NOT in currency
+            var kmDistance: Decimal = 0
+            var lineForNumbers = line
+
+            // Remove date if present
+            if let range = line.range(of: "^\\s*[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}\\s*", options: .regularExpression) {
+                lineForNumbers = String(line[range.upperBound...])
+            }
+
+            // Find number between description and € (the km distance)
+            if let euroIndex = lineForNumbers.firstIndex(of: "€") {
+                let beforeEuro = String(lineForNumbers[..<euroIndex])
+                if let kmMatch = extractPattern(from: beforeEuro, pattern: "([0-9]+)\\s*$") {
+                    kmDistance = Decimal(string: kmMatch) ?? 0
+                }
+            }
+
+            guard kmDistance >= 10 && kmDistance <= 500 else { return (nil, currentDate) }
+
+            let rate = currencyValues.first { $0 < 1 } ?? 0.23
+            let total = currencyValues.first { $0 > 1 && $0 < 100 } ?? (kmDistance * rate)
+
+            let item = ParsedLineItem(
+                date: kmDate,
+                description: "Reiskosten",
+                quantity: kmDistance,
+                rate: rate,
+                total: total,
+                isHoursEntry: false
+            )
+            return (item, currentDate)
+        }
+
+        return (nil, currentDate)
     }
 
     /// Format E: Separate lines for hours and km
@@ -1279,6 +1439,8 @@ struct ParsedInvoice {
     let clientLocation: String
     let lineItems: [ParsedLineItem]
     let totalAmount: Decimal
+    let verdeelfactor: Decimal?  // For split payment invoices (0.0-1.0)
+    let isSplitPayment: Bool     // True if "Deelbetaling" detected
 }
 
 struct ParsedLineItem {

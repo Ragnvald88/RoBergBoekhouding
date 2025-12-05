@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 
+// TODO: Add batch email sending for multiple invoices
 struct InvoiceListView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.modelContext) private var modelContext

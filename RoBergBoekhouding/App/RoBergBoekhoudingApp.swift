@@ -1,3 +1,11 @@
+//
+//  UurwerkerApp.swift
+//  Uurwerker
+//
+//  Created by Ronald Hoogenberg on 2024.
+//  Copyright © 2024-2025 RoBerg. All rights reserved.
+//
+
 import SwiftUI
 import SwiftData
 import AppKit

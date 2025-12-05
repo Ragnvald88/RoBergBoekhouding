@@ -66,6 +66,7 @@ struct DashboardView: View {
     }
 
     // MARK: - Header Section
+    // TODO: Add quick date range selector (week/month/quarter)
     private var headerSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
