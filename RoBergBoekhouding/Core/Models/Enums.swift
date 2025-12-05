@@ -1,21 +1,96 @@
 import Foundation
 
-// MARK: - Client Type
+// MARK: - BTW Tarief (VAT Rate)
+enum BTWTarief: String, Codable, CaseIterable {
+    case vrijgesteld = "Vrijgesteld"
+    case laag = "9%"
+    case standaard = "21%"
+
+    var displayName: String { rawValue }
+
+    var percentage: Decimal {
+        switch self {
+        case .vrijgesteld: return 0
+        case .laag: return Decimal(string: "0.09") ?? 0.09
+        case .standaard: return Decimal(string: "0.21") ?? 0.21
+        }
+    }
+
+    var percentageFormatted: String {
+        switch self {
+        case .vrijgesteld: return "0%"
+        case .laag: return "9%"
+        case .standaard: return "21%"
+        }
+    }
+
+    /// Short code for display in tables
+    var shortCode: String {
+        switch self {
+        case .vrijgesteld: return "BTW-vrij"
+        case .laag: return "9%"
+        case .standaard: return "21%"
+        }
+    }
+
+    /// Legal text for invoice footer
+    var legalText: String? {
+        switch self {
+        case .vrijgesteld:
+            return "Vrijgesteld van BTW op grond van artikel 11, lid 1, onderdeel g, van de Wet op de Omzetbelasting."
+        case .laag, .standaard:
+            return nil
+        }
+    }
+}
+
+// MARK: - Client Type (Generic for all ZZP)
 enum ClientType: String, Codable, CaseIterable {
+    case zakelijk = "Zakelijk"
+    case particulier = "Particulier"
+    case overheid = "Overheid"
+
+    // Legacy cases for backward compatibility with existing data
     case dagpraktijk = "Dagpraktijk"
     case anwDienst = "ANW Dienst"
     case administratie = "Administratie"
 
     var displayName: String {
         switch self {
-        case .dagpraktijk: return "Dagpraktijk"
-        case .anwDienst: return "ANW Dienst"
+        case .zakelijk: return "Zakelijk"
+        case .particulier: return "Particulier"
+        case .overheid: return "Overheid"
+        case .dagpraktijk: return "Dagpraktijk (Zorg)"
+        case .anwDienst: return "ANW Dienst (Zorg)"
         case .administratie: return "Administratie"
+        }
+    }
+
+    /// Primary client types shown in new client forms
+    static var primaryTypes: [ClientType] {
+        [.zakelijk, .particulier, .overheid]
+    }
+
+    /// All types including legacy healthcare types
+    static var allTypesIncludingLegacy: [ClientType] {
+        allCases
+    }
+
+    /// Icon for this client type
+    var icon: String {
+        switch self {
+        case .zakelijk, .dagpraktijk, .anwDienst: return "building.2"
+        case .particulier: return "person"
+        case .overheid: return "building.columns"
+        case .administratie: return "doc.text"
         }
     }
 
     var defaultHourlyRate: Decimal {
         switch self {
+        case .zakelijk: return 75.00
+        case .particulier: return 50.00
+        case .overheid: return 80.00
         case .dagpraktijk: return 70.00
         case .anwDienst: return 124.00
         case .administratie: return 0.00

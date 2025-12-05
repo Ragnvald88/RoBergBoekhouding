@@ -50,8 +50,16 @@ struct ClientListView: View {
                     if !activeClients.isEmpty {
                         Section("Actief") {
                             ForEach(activeClients) { client in
-                                ClientRow(client: client)
-                                    .tag(client)
+                                ClientRow(
+                                    client: client,
+                                    onNewClient: { appState.showNewClient = true },
+                                    onNewTimeEntry: { selectedClient in
+                                        appState.selectedSidebarItem = .urenregistratie
+                                        appState.showNewTimeEntry = true
+                                        // Note: TimeEntryFormView will need to support pre-selected client
+                                    }
+                                )
+                                .tag(client)
                             }
                         }
                     }
@@ -59,8 +67,15 @@ struct ClientListView: View {
                     if !inactiveClients.isEmpty {
                         Section("Inactief") {
                             ForEach(inactiveClients) { client in
-                                ClientRow(client: client)
-                                    .tag(client)
+                                ClientRow(
+                                    client: client,
+                                    onNewClient: { appState.showNewClient = true },
+                                    onNewTimeEntry: { _ in
+                                        appState.selectedSidebarItem = .urenregistratie
+                                        appState.showNewTimeEntry = true
+                                    }
+                                )
+                                .tag(client)
                             }
                         }
                     }
@@ -102,6 +117,8 @@ struct ClientListView: View {
 // MARK: - Client Row
 struct ClientRow: View {
     let client: Client
+    var onNewClient: (() -> Void)?
+    var onNewTimeEntry: ((Client) -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -147,6 +164,33 @@ struct ClientRow: View {
             }
         }
         .padding(.vertical, 4)
+        .contextMenu {
+            if let onNewClient {
+                Button {
+                    onNewClient()
+                } label: {
+                    Label("Nieuwe klant", systemImage: "plus")
+                }
+
+                Divider()
+            }
+
+            if let onNewTimeEntry {
+                Button {
+                    onNewTimeEntry(client)
+                } label: {
+                    Label("Nieuwe urenregistratie", systemImage: "clock.badge.plus")
+                }
+            }
+
+            if client.unbilledAmount > 0 {
+                Button {
+                    // This could navigate to invoice creation
+                } label: {
+                    Label("Factureer openstaande uren", systemImage: "doc.text")
+                }
+            }
+        }
     }
 }
 

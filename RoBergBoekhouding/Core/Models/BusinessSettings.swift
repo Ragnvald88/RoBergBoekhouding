@@ -27,7 +27,13 @@ final class BusinessSettings {
 
     // MARK: - Tax Settings
     var urendrempelZelfstandigenaftrek: Int // 1225 hours minimum
-    var btwVrijgesteld: Bool                // Healthcare is BTW exempt
+    var btwVrijgesteld: Bool                // Legacy: Healthcare is BTW exempt
+    var standaardBTWTariefRaw: String       // Default BTW tarief for new invoices
+
+    // MARK: - Branding
+    var logoPath: String?                   // Path to company logo
+    var primaryColorHex: String?            // Brand color for invoices
+    var invoiceFooterText: String?          // Custom invoice footer text
 
     // MARK: - File Paths
     var dataDirectory: String?              // Path to bookkeeping files
@@ -87,6 +93,23 @@ final class BusinessSettings {
         return resolvedDataDirectory
     }
 
+    /// Default BTW tarief for new invoices
+    var standaardBTWTarief: BTWTarief {
+        get { BTWTarief(rawValue: standaardBTWTariefRaw) ?? .vrijgesteld }
+        set { standaardBTWTariefRaw = newValue.rawValue }
+    }
+
+    /// Get full URL to logo if exists
+    var logoURL: URL? {
+        guard let path = logoPath, !path.isEmpty else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
+    /// Brand color for invoices (defaults to blue)
+    var primaryColor: String {
+        primaryColorHex ?? "#2563eb"
+    }
+
     /// Formatted storage size used by documents
     var formattedStorageUsed: String {
         DocumentStorageService.shared.formattedStorageUsed(customBasePath: dataDirectory)
@@ -115,7 +138,11 @@ final class BusinessSettings {
         standaardBetalingstermijn: Int = 14,
         laatsteFactuurnummer: Int = 0,
         urendrempelZelfstandigenaftrek: Int = 1225,
-        btwVrijgesteld: Bool = true
+        btwVrijgesteld: Bool = true,
+        standaardBTWTarief: BTWTarief = .vrijgesteld,
+        logoPath: String? = nil,
+        primaryColorHex: String? = nil,
+        invoiceFooterText: String? = nil
     ) {
         self.id = id
         self.bedrijfsnaam = bedrijfsnaam
@@ -135,6 +162,10 @@ final class BusinessSettings {
         self.laatsteFactuurnummer = laatsteFactuurnummer
         self.urendrempelZelfstandigenaftrek = urendrempelZelfstandigenaftrek
         self.btwVrijgesteld = btwVrijgesteld
+        self.standaardBTWTariefRaw = standaardBTWTarief.rawValue
+        self.logoPath = logoPath
+        self.primaryColorHex = primaryColorHex
+        self.invoiceFooterText = invoiceFooterText
         self.createdAt = Date()
         self.updatedAt = Date()
     }

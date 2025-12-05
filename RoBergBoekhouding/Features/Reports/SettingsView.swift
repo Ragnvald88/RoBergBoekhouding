@@ -24,168 +24,36 @@ struct SettingsView: View {
     @State private var standaardUurtariefANW: Decimal = 124
     @State private var standaardKilometertarief: Decimal = 0.23
     @State private var standaardBetalingstermijn: Int = 14
+    @State private var standaardBTWTarief: BTWTarief = .vrijgesteld
 
     @State private var hasChanges = false
     @State private var showingSaveAlert = false
+    @State private var showingAboutView = false
 
     var body: some View {
+        settingsForm
+            .sheet(isPresented: $showingAboutView) {
+                AboutView()
+            }
+            .sheet(isPresented: $appState.showImportSheet) {
+                ImportView()
+            }
+            .alert("Instellingen opgeslagen", isPresented: $showingSaveAlert) {
+                Button("OK", role: .cancel) { }
+            }
+    }
+
+    private var settingsForm: some View {
         Form {
-            // Business Information
-            Section("Bedrijfsgegevens") {
-                TextField("Bedrijfsnaam", text: $bedrijfsnaam)
-                TextField("Eigenaar", text: $eigenaar)
-                TextField("Adres", text: $adres)
-                TextField("Postcode en plaats", text: $postcodeplaats)
-            }
-
-            Section("Contactgegevens") {
-                TextField("Telefoon", text: $telefoon)
-                TextField("Email", text: $email)
-                    .textContentType(.emailAddress)
-            }
-
-            Section("Bedrijfsregistratie") {
-                TextField("KvK-nummer", text: $kvkNummer)
-                TextField("Bank", text: $bank)
-                TextField("IBAN", text: $iban)
-            }
-
-            Section("Standaard tarieven") {
-                HStack {
-                    Text("Uurtarief dagpraktijk")
-                    Spacer()
-                    TextField("Tarief", value: $standaardUurtariefDag, format: .currency(code: "EUR"))
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                        .multilineTextAlignment(.trailing)
-                }
-
-                HStack {
-                    Text("Uurtarief ANW-dienst")
-                    Spacer()
-                    TextField("Tarief", value: $standaardUurtariefANW, format: .currency(code: "EUR"))
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                        .multilineTextAlignment(.trailing)
-                }
-
-                HStack {
-                    Text("Kilometertarief")
-                    Spacer()
-                    TextField("Tarief", value: $standaardKilometertarief, format: .currency(code: "EUR"))
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                        .multilineTextAlignment(.trailing)
-                }
-
-                Stepper("Betalingstermijn: \(standaardBetalingstermijn) dagen", value: $standaardBetalingstermijn, in: 7...60)
-            }
-
-            Section("Factuurnummering") {
-                if let settings {
-                    HStack {
-                        Text("Huidige prefix")
-                        Spacer()
-                        Text(settings.factuurnummerPrefix)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Text("Laatst gebruikte nummer")
-                        Spacer()
-                        Text("\(settings.laatsteFactuurnummer)")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    HStack {
-                        Text("Volgend factuurnummer")
-                        Spacer()
-                        Text("\(settings.factuurnummerPrefix)\(String(format: "%03d", settings.laatsteFactuurnummer + 1))")
-                            .fontWeight(.medium)
-                    }
-                }
-            }
-
-            Section("Belasting") {
-                HStack {
-                    Text("BTW-status")
-                    Spacer()
-                    Text("Vrijgesteld (medische diensten)")
-                        .foregroundStyle(.green)
-                }
-
-                HStack {
-                    Text("Urendrempel zelfstandigenaftrek")
-                    Spacer()
-                    Text("1.225 uur")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section("Data") {
-                Button("Importeer klanten (CSV)") {
-                    appState.showImportSheet = true
-                }
-
-                Button("Importeer urenregistraties (CSV)") {
-                    appState.showImportSheet = true
-                }
-            }
-
-            Section("Documentopslag") {
-                if let settings {
-                    HStack {
-                        Text("Locatie")
-                        Spacer()
-                        Text(settings.resolvedDataDirectory.path)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-
-                    HStack {
-                        Text("Opslaggebruik")
-                        Spacer()
-                        Text(settings.formattedStorageUsed)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button("Open documentenmap") {
-                        settings.openDocumentsFolder()
-                    }
-
-                    Button("Wijzig locatie...") {
-                        selectDocumentDirectory()
-                    }
-
-                    if settings.dataDirectory != nil && !settings.dataDirectory!.isEmpty {
-                        Button("Herstel standaard locatie") {
-                            settings.dataDirectory = nil
-                            settings.updateTimestamp()
-                            try? modelContext.save()
-                            hasChanges = false
-                        }
-                        .foregroundStyle(.orange)
-                    }
-                }
-            }
-
-            Section("Over") {
-                HStack {
-                    Text("Versie")
-                    Spacer()
-                    Text("1.0.0")
-                        .foregroundStyle(.secondary)
-                }
-
-                HStack {
-                    Text("Ontwikkeld voor")
-                    Spacer()
-                    Text("RoBerg huisartswaarnemer")
-                        .foregroundStyle(.secondary)
-                }
-            }
+            bedrijfsgegevensSection
+            contactSection
+            registratieSection
+            tarievenSection
+            factuurnummeringSection
+            belastingSection
+            dataSection
+            documentopslagSection
+            overDeAppSection
         }
         .formStyle(.grouped)
         .navigationTitle("Instellingen")
@@ -197,29 +65,196 @@ struct SettingsView: View {
                 .disabled(!hasChanges)
             }
         }
-        .onAppear {
-            loadSettings()
-        }
-        .onChange(of: bedrijfsnaam) { _, _ in hasChanges = true }
-        .onChange(of: eigenaar) { _, _ in hasChanges = true }
-        .onChange(of: adres) { _, _ in hasChanges = true }
-        .onChange(of: postcodeplaats) { _, _ in hasChanges = true }
-        .onChange(of: telefoon) { _, _ in hasChanges = true }
-        .onChange(of: email) { _, _ in hasChanges = true }
-        .onChange(of: kvkNummer) { _, _ in hasChanges = true }
-        .onChange(of: iban) { _, _ in hasChanges = true }
-        .onChange(of: bank) { _, _ in hasChanges = true }
-        .onChange(of: standaardUurtariefDag) { _, _ in hasChanges = true }
-        .onChange(of: standaardUurtariefANW) { _, _ in hasChanges = true }
-        .onChange(of: standaardKilometertarief) { _, _ in hasChanges = true }
-        .onChange(of: standaardBetalingstermijn) { _, _ in hasChanges = true }
-        .alert("Instellingen opgeslagen", isPresented: $showingSaveAlert) {
-            Button("OK", role: .cancel) { }
-        }
-        .sheet(isPresented: $appState.showImportSheet) {
-            ImportView()
+        .onAppear(perform: loadSettings)
+        .onChange(of: bedrijfsnaam) { markChanged() }
+        .onChange(of: eigenaar) { markChanged() }
+        .onChange(of: adres) { markChanged() }
+        .onChange(of: postcodeplaats) { markChanged() }
+        .onChange(of: telefoon) { markChanged() }
+        .onChange(of: email) { markChanged() }
+        .onChange(of: kvkNummer) { markChanged() }
+        .onChange(of: iban) { markChanged() }
+        .onChange(of: bank) { markChanged() }
+        .onChange(of: standaardUurtariefDag) { markChanged() }
+        .onChange(of: standaardUurtariefANW) { markChanged() }
+        .onChange(of: standaardKilometertarief) { markChanged() }
+        .onChange(of: standaardBetalingstermijn) { markChanged() }
+        .onChange(of: standaardBTWTarief) { markChanged() }
+    }
+
+    private func markChanged() {
+        hasChanges = true
+    }
+
+    // MARK: - Extracted Sections
+
+    private var bedrijfsgegevensSection: some View {
+        Section("Bedrijfsgegevens") {
+            TextField("Bedrijfsnaam", text: $bedrijfsnaam)
+            TextField("Eigenaar", text: $eigenaar)
+            TextField("Adres", text: $adres)
+            TextField("Postcode en plaats", text: $postcodeplaats)
         }
     }
+
+    private var contactSection: some View {
+        Section("Contactgegevens") {
+            TextField("Telefoon", text: $telefoon)
+            TextField("Email", text: $email)
+                .textContentType(.emailAddress)
+        }
+    }
+
+    private var registratieSection: some View {
+        Section("Bedrijfsregistratie") {
+            TextField("KvK-nummer", text: $kvkNummer)
+            TextField("Bank", text: $bank)
+            TextField("IBAN", text: $iban)
+        }
+    }
+
+    private var tarievenSection: some View {
+        Section("Standaard tarieven") {
+            HStack {
+                Text("Uurtarief dagpraktijk")
+                Spacer()
+                TextField("Tarief", value: $standaardUurtariefDag, format: .currency(code: "EUR"))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+                    .multilineTextAlignment(.trailing)
+            }
+            HStack {
+                Text("Uurtarief ANW-dienst")
+                Spacer()
+                TextField("Tarief", value: $standaardUurtariefANW, format: .currency(code: "EUR"))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+                    .multilineTextAlignment(.trailing)
+            }
+            HStack {
+                Text("Kilometertarief")
+                Spacer()
+                TextField("Tarief", value: $standaardKilometertarief, format: .currency(code: "EUR"))
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+                    .multilineTextAlignment(.trailing)
+            }
+            Stepper("Betalingstermijn: \(standaardBetalingstermijn) dagen", value: $standaardBetalingstermijn, in: 7...60)
+        }
+    }
+
+    private var factuurnummeringSection: some View {
+        Section("Factuurnummering") {
+            if let settings {
+                HStack {
+                    Text("Huidige prefix")
+                    Spacer()
+                    Text(settings.factuurnummerPrefix)
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Laatst gebruikte nummer")
+                    Spacer()
+                    Text("\(settings.laatsteFactuurnummer)")
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Text("Volgend factuurnummer")
+                    Spacer()
+                    Text("\(settings.factuurnummerPrefix)\(String(format: "%03d", settings.laatsteFactuurnummer + 1))")
+                        .fontWeight(.medium)
+                }
+            }
+        }
+    }
+
+    private var belastingSection: some View {
+        Section("Belasting") {
+            Picker("Standaard BTW-tarief", selection: $standaardBTWTarief) {
+                ForEach(BTWTarief.allCases, id: \.self) { tarief in
+                    Text(tarief.displayName).tag(tarief)
+                }
+            }
+            if standaardBTWTarief == .vrijgesteld {
+                Text("BTW-vrijgestelde diensten volgens artikel 11, lid 1, onderdeel g, Wet OB")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            HStack {
+                Text("Urendrempel zelfstandigenaftrek")
+                Spacer()
+                Text("1.225 uur")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var dataSection: some View {
+        Section("Data") {
+            Button("Importeer klanten (CSV)") {
+                appState.showImportSheet = true
+            }
+            Button("Importeer urenregistraties (CSV)") {
+                appState.showImportSheet = true
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var documentopslagSection: some View {
+        Section("Documentopslag") {
+            if let settings {
+                HStack {
+                    Text("Locatie")
+                    Spacer()
+                    Text(settings.resolvedDataDirectory.path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                HStack {
+                    Text("Opslaggebruik")
+                    Spacer()
+                    Text(settings.formattedStorageUsed)
+                        .foregroundStyle(.secondary)
+                }
+                Button("Open documentenmap") {
+                    settings.openDocumentsFolder()
+                }
+                Button("Wijzig locatie...") {
+                    selectDocumentDirectory()
+                }
+                if settings.dataDirectory != nil && !settings.dataDirectory!.isEmpty {
+                    Button("Herstel standaard locatie") {
+                        settings.dataDirectory = nil
+                        settings.updateTimestamp()
+                        try? modelContext.save()
+                        hasChanges = false
+                    }
+                    .foregroundStyle(.orange)
+                }
+            }
+        }
+    }
+
+    private var overDeAppSection: some View {
+        Section("Over de app") {
+            Button {
+                showingAboutView = true
+            } label: {
+                HStack {
+                    Text("Over deze app")
+                    Spacer()
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Methods
 
     private func loadSettings() {
         settings = BusinessSettings.ensureSettingsExist(in: modelContext)
@@ -239,6 +274,7 @@ struct SettingsView: View {
         standaardUurtariefANW = settings.standaardUurtariefANW
         standaardKilometertarief = settings.standaardKilometertarief
         standaardBetalingstermijn = settings.standaardBetalingstermijn
+        standaardBTWTarief = settings.standaardBTWTarief
 
         hasChanges = false
     }
@@ -259,6 +295,7 @@ struct SettingsView: View {
         settings.standaardUurtariefANW = standaardUurtariefANW
         settings.standaardKilometertarief = standaardKilometertarief
         settings.standaardBetalingstermijn = standaardBetalingstermijn
+        settings.standaardBTWTarief = standaardBTWTarief
         settings.updateTimestamp()
 
         try? modelContext.save()
@@ -286,6 +323,98 @@ struct SettingsView: View {
             // Ensure directory structure exists in new location
             try? DocumentStorageService.shared.ensureDirectoryStructure(customBasePath: url.path)
         }
+    }
+}
+
+// MARK: - About View
+
+/// About view showing app information - Required for App Store
+struct AboutView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    // App version info
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 16) {
+                Image(systemName: "clock.badge.checkmark")
+                    .font(.system(size: 64))
+                    .foregroundStyle(.blue)
+                    .accessibilityLabel("App icoon")
+
+                VStack(spacing: 4) {
+                    Text("RoBerg Boekhouding")
+                        .font(.title)
+                        .fontWeight(.bold)
+
+                    Text("Versie \(appVersion) (\(buildNumber))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Boekhouding voor ZZP'ers")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 32)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Features
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Functies")
+                            .font(.headline)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Urenregistratie", systemImage: "clock")
+                            Label("Facturatie met BTW", systemImage: "doc.text")
+                            Label("Klantenbeheer", systemImage: "person.2")
+                            Label("Uitgavenbeheer", systemImage: "creditcard")
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+
+                    Divider()
+
+                    // Privacy
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Privacy")
+                            .font(.headline)
+                        Text("Al je gegevens blijven lokaal op je Mac. Deze app verzamelt geen data en maakt geen verbinding met externe servers.")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\u{00A9} 2025 RoBerg. Alle rechten voorbehouden.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(24)
+            }
+
+            Divider()
+
+            HStack {
+                Spacer()
+                Button("Sluiten") { dismiss() }
+                    .keyboardShortcut(.escape)
+            }
+            .padding()
+        }
+        .frame(width: 400, height: 500)
     }
 }
 

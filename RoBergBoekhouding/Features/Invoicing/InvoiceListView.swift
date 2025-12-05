@@ -75,6 +75,9 @@ struct InvoiceListView: View {
                             onShowPDF: {
                                 invoiceForPDFPreview = invoice
                                 showPDFPreview = true
+                            },
+                            onNewInvoice: {
+                                appState.showNewInvoice = true
                             }
                         )
                         .tag(invoice.id)
@@ -344,6 +347,7 @@ struct InvoiceRow: View {
     let invoice: Invoice
     let onDelete: () -> Void
     let onShowPDF: () -> Void
+    var onNewInvoice: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -390,6 +394,17 @@ struct InvoiceRow: View {
         }
         .padding(.vertical, 4)
         .contextMenu {
+            // New invoice option
+            if let onNewInvoice {
+                Button {
+                    onNewInvoice()
+                } label: {
+                    Label("Nieuwe factuur", systemImage: "plus")
+                }
+
+                Divider()
+            }
+
             // PDF Preview - always available
             Button {
                 onShowPDF()

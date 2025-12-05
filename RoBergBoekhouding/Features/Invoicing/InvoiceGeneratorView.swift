@@ -13,6 +13,7 @@ struct InvoiceGeneratorView: View {
     @State private var selectedEntries: Set<TimeEntry.ID> = []
     @State private var factuurdatum: Date = Date()
     @State private var notities: String = ""
+    @State private var btwTarief: BTWTarief = .vrijgesteld
 
     private var unbilledEntries: [TimeEntry] {
         guard let client = selectedClient else { return [] }
@@ -43,8 +44,16 @@ struct InvoiceGeneratorView: View {
         selectedEntriesArray.reduce(0) { $0 + $1.totaalbedragKm }
     }
 
-    private var totaalbedrag: Decimal {
+    private var subtotaal: Decimal {
         totaalUrenBedrag + totaalKmBedrag
+    }
+
+    private var btwBedrag: Decimal {
+        subtotaal * btwTarief.percentage
+    }
+
+    private var totaalbedrag: Decimal {
+        subtotaal + btwBedrag
     }
 
     private var canCreate: Bool {
@@ -187,6 +196,23 @@ struct InvoiceGeneratorView: View {
 
                                 Divider()
 
+                                // BTW Selection
+                                HStack {
+                                    Text("BTW-tarief")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Picker("BTW", selection: $btwTarief) {
+                                        ForEach(BTWTarief.allCases, id: \.self) { tarief in
+                                            Text(tarief.displayName).tag(tarief)
+                                        }
+                                    }
+                                    .frame(width: 140)
+                                    .accessibilityLabel("BTW tarief selectie")
+                                }
+
+                                Divider()
+
                                 // Summary
                                 VStack(spacing: 8) {
                                     HStack {
@@ -208,11 +234,37 @@ struct InvoiceGeneratorView: View {
                                     Divider()
 
                                     HStack {
-                                        Text("TOTAAL")
+                                        Text("Subtotaal")
+                                        Spacer()
+                                        Text(subtotaal.asCurrency)
+                                            .frame(width: 90, alignment: .trailing)
+                                    }
+
+                                    if btwTarief != .vrijgesteld {
+                                        HStack {
+                                            Text("BTW \(btwTarief.percentageFormatted)")
+                                                .foregroundStyle(.secondary)
+                                            Spacer()
+                                            Text(btwBedrag.asCurrency)
+                                                .foregroundStyle(.secondary)
+                                                .frame(width: 90, alignment: .trailing)
+                                        }
+                                    }
+
+                                    Divider()
+
+                                    HStack {
+                                        Text("TOTAAL\(btwTarief != .vrijgesteld ? " incl. BTW" : "")")
                                             .fontWeight(.bold)
                                         Spacer()
                                         Text(totaalbedrag.asCurrency)
                                             .font(.title2.weight(.bold))
+                                    }
+
+                                    if btwTarief == .vrijgesteld {
+                                        Text("BTW vrijgesteld")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
                                 .font(.subheadline)
@@ -242,6 +294,12 @@ struct InvoiceGeneratorView: View {
         .frame(width: 900, height: 600)
         .onChange(of: selectedClient) { _, _ in
             selectedEntries.removeAll()
+        }
+        .onAppear {
+            // Initialize BTW tarief from settings
+            if let businessSettings = settings.first {
+                btwTarief = businessSettings.standaardBTWTarief
+            }
         }
     }
 
@@ -303,14 +361,15 @@ struct InvoiceGeneratorView: View {
         // Generate invoice number
         let invoiceNumber = businessSettings.generateNextInvoiceNumber()
 
-        // Create invoice
+        // Create invoice with BTW
         let invoice = Invoice(
             factuurnummer: invoiceNumber,
             factuurdatum: factuurdatum,
             betalingstermijn: businessSettings.standaardBetalingstermijn,
             status: .concept,
             client: client,
-            notities: notities.isEmpty ? nil : notities
+            notities: notities.isEmpty ? nil : notities,
+            btwTarief: btwTarief
         )
 
         modelContext.insert(invoice)

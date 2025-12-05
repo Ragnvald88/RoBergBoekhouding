@@ -105,6 +105,14 @@ struct TimeEntryListView: View {
                 .contextMenu(forSelectionType: TimeEntry.ID.self) { selection in
                     let selectedItems = filteredEntries.filter { selection.contains($0.id) }
 
+                    // Always show "new entry" option
+                    Button {
+                        appState.selectedTimeEntry = nil
+                        appState.showNewTimeEntry = true
+                    } label: {
+                        Label("Nieuwe registratie", systemImage: "plus")
+                    }
+
                     if selectedItems.count == 1, let entry = selectedItems.first {
                         Button {
                             appState.selectedTimeEntry = entry
@@ -113,10 +121,31 @@ struct TimeEntryListView: View {
                             Label("Bewerken", systemImage: "pencil")
                         }
 
+                        // Option to duplicate for same client
+                        if let client = entry.client {
+                            Button {
+                                duplicateEntryForClient(entry, client: client)
+                            } label: {
+                                Label("Kopieer voor \(client.bedrijfsnaam)", systemImage: "doc.on.doc")
+                            }
+                        }
+                    }
+
+                    // Invoice option for unbilled billable entries
+                    let unbilledItems = selectedItems.filter { $0.isBillable && !$0.isInvoiced }
+                    if !unbilledItems.isEmpty {
                         Divider()
+
+                        Button {
+                            createInvoiceFromEntries(unbilledItems)
+                        } label: {
+                            Label(unbilledItems.count == 1 ? "Factureer" : "Factureer \(unbilledItems.count) items", systemImage: "doc.text")
+                        }
                     }
 
                     if !selectedItems.isEmpty {
+                        Divider()
+
                         Button(role: .destructive) {
                             entriesToDelete = selectedItems
                             showingDeleteAlert = true
@@ -238,6 +267,36 @@ struct TimeEntryListView: View {
         }
         try? modelContext.save()
         entriesToDelete = []
+    }
+
+    private func duplicateEntryForClient(_ entry: TimeEntry, client: Client) {
+        let newEntry = TimeEntry(
+            datum: Date(),
+            code: entry.code,
+            activiteit: entry.activiteit,
+            locatie: entry.locatie,
+            uren: entry.uren,
+            visiteKilometers: entry.visiteKilometers,
+            retourafstandWoonWerk: entry.retourafstandWoonWerk,
+            uurtarief: entry.uurtarief,
+            kilometertarief: entry.kilometertarief,
+            isBillable: entry.isBillable,
+            client: client
+        )
+        modelContext.insert(newEntry)
+        try? modelContext.save()
+
+        // Open the new entry for editing
+        appState.selectedTimeEntry = newEntry
+        appState.showNewTimeEntry = true
+    }
+
+    private func createInvoiceFromEntries(_ entries: [TimeEntry]) {
+        // Navigate to invoice creation with these entries pre-selected
+        appState.selectedSidebarItem = .facturen
+        appState.showNewInvoice = true
+        // Note: The InvoiceGeneratorView will need to be updated to accept pre-selected entries
+        // For now, this just navigates to the invoice section
     }
 }
 

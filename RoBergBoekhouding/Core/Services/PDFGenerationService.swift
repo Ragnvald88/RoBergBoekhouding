@@ -60,7 +60,10 @@ class PDFGenerationService {
 
     /// Generate HTML for an invoice
     func generateInvoiceHTML(for invoice: Invoice) -> String {
-        """
+        let brandColor = settings.primaryColor
+        let hasBTW = invoice.hasBTW
+
+        return """
         <!DOCTYPE html>
         <html lang="nl">
         <head>
@@ -82,7 +85,7 @@ class PDFGenerationService {
                 .logo {
                     font-size: 28pt;
                     font-weight: bold;
-                    color: #2563eb;
+                    color: \(brandColor);
                 }
                 .subtitle {
                     font-size: 14pt;
@@ -163,7 +166,7 @@ class PDFGenerationService {
                 .totals {
                     margin-top: 24px;
                     margin-left: auto;
-                    width: 280px;
+                    width: 300px;
                 }
                 .totals-row {
                     display: flex;
@@ -174,6 +177,9 @@ class PDFGenerationService {
                 .totals-row.subtotal {
                     border-top: 1px solid #e2e8f0;
                     padding-top: 12px;
+                }
+                .totals-row.btw {
+                    color: #666;
                 }
                 .totals-row.grand-total {
                     border-top: 2px solid #333;
@@ -189,7 +195,7 @@ class PDFGenerationService {
                     color: #666;
                     line-height: 1.6;
                 }
-                .no-btw {
+                .btw-note {
                     margin-top: 16px;
                     font-size: 9pt;
                     color: #94a3b8;
@@ -200,8 +206,8 @@ class PDFGenerationService {
         <body>
             <div class="header">
                 <div>
-                    <div class="logo">RoBerg</div>
-                    <div class="subtitle">huisartswaarnemer</div>
+                    <div class="logo">\(settings.bedrijfsnaam.components(separatedBy: " ").first ?? settings.bedrijfsnaam)</div>
+                    <div class="subtitle">\(settings.eigenaar)</div>
                     <div class="contact-info">
                         \(settings.adres)<br>
                         \(settings.postcodeplaats)<br><br>
@@ -246,29 +252,85 @@ class PDFGenerationService {
             </table>
 
             <div class="totals">
-                <div class="totals-row">
-                    <span>Totaal uren</span>
-                    <span>\(invoice.totaalUrenBedrag.asCurrency)</span>
-                </div>
-                <div class="totals-row">
-                    <span>Totaal kilometerkosten</span>
-                    <span>\(invoice.totaalKmBedrag.asCurrency)</span>
-                </div>
-                <div class="totals-row grand-total">
-                    <span>TOTAAL</span>
-                    <span>\(invoice.totaalbedrag.asCurrency)</span>
-                </div>
+                \(generateTotalsHTML(for: invoice, hasBTW: hasBTW))
             </div>
 
             <div class="footer">
-                \(settings.paymentInstruction)
-                <div class="no-btw">
-                    Medische diensten zijn vrijgesteld van BTW op grond van artikel 11, lid 1, onderdeel g, van de Wet op de Omzetbelasting.
-                </div>
+                \(settings.invoiceFooterText ?? settings.paymentInstruction)
+                \(generateBTWNote(for: invoice))
             </div>
         </body>
         </html>
         """
+    }
+
+    /// Generate totals section HTML
+    private func generateTotalsHTML(for invoice: Invoice, hasBTW: Bool) -> String {
+        var html = ""
+
+        // Subtotals
+        if invoice.totaalUrenBedrag > 0 {
+            html += """
+            <div class="totals-row">
+                <span>Totaal uren</span>
+                <span>\(invoice.totaalUrenBedrag.asCurrency)</span>
+            </div>
+            """
+        }
+
+        if invoice.totaalKmBedrag > 0 {
+            html += """
+            <div class="totals-row">
+                <span>Totaal kilometerkosten</span>
+                <span>\(invoice.totaalKmBedrag.asCurrency)</span>
+            </div>
+            """
+        }
+
+        if invoice.subtotaalManualItems > 0 {
+            html += """
+            <div class="totals-row">
+                <span>Overige posten</span>
+                <span>\(invoice.subtotaalManualItems.asCurrency)</span>
+            </div>
+            """
+        }
+
+        // Subtotal excl BTW (only show if there's BTW)
+        if hasBTW {
+            html += """
+            <div class="totals-row subtotal">
+                <span>Subtotaal excl. BTW</span>
+                <span>\(invoice.totaalbedragExclBTW.asCurrency)</span>
+            </div>
+            <div class="totals-row btw">
+                <span>BTW \(invoice.btwTarief.percentageFormatted)</span>
+                <span>\(invoice.btwBedragFormatted)</span>
+            </div>
+            """
+        }
+
+        // Grand total
+        html += """
+        <div class="totals-row grand-total">
+            <span>TOTAAL\(hasBTW ? " incl. BTW" : "")</span>
+            <span>\(invoice.totaalbedrag.asCurrency)</span>
+        </div>
+        """
+
+        return html
+    }
+
+    /// Generate BTW note for footer
+    private func generateBTWNote(for invoice: Invoice) -> String {
+        if let legalText = invoice.btwTarief.legalText {
+            return """
+            <div class="btw-note">
+                \(legalText)
+            </div>
+            """
+        }
+        return ""
     }
 
     private func generateClientAddress(_ client: Client?) -> String {

@@ -253,7 +253,7 @@ struct TimeEntryFormView: View {
         retourafstand = client.afstandRetour
         locatie = extractCity(from: client.postcodeplaats)
 
-        // Update code based on client type
+        // Update code and activity based on client type
         switch client.clientType {
         case .dagpraktijk:
             code = "WDAGPRAKTIJK_70"
@@ -271,6 +271,15 @@ struct TimeEntryFormView: View {
             kmtarief = 0
             retourafstand = 0
             isBillable = false
+        case .zakelijk:
+            activiteit = "Werkzaamheden"
+            isBillable = true
+        case .particulier:
+            activiteit = "Dienstverlening"
+            isBillable = true
+        case .overheid:
+            activiteit = "Opdracht"
+            isBillable = true
         }
     }
 
