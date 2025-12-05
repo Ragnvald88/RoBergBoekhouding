@@ -103,16 +103,16 @@ struct DashboardView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Omzet dit jaar: \(yearEntries.totalRevenue.asCurrency). \(yearComparisonText)")
 
-            // Hours YTD
+            // Hours YTD - show working hours (excludes standby)
             KPICardView(
-                title: "Uren YTD",
-                value: "\(yearEntries.totalHours.asDecimal)",
-                subtitle: "van \(settings.first?.urendrempelZelfstandigenaftrek ?? 1225)",
+                title: "Werkuren YTD",
+                value: "\(yearEntries.totalWorkingHours.asDecimal)",
+                subtitle: standbyHoursSubtitle,
                 icon: "clock.fill",
                 color: .blue
             )
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Uren dit jaar: \(yearEntries.totalHours.asDecimal) van \(settings.first?.urendrempelZelfstandigenaftrek ?? 1225)")
+            .accessibilityLabel("Werkuren dit jaar: \(yearEntries.totalWorkingHours.asDecimal). \(standbyHoursSubtitle)")
 
             // Kilometers YTD
             KPICardView(
@@ -182,11 +182,12 @@ struct DashboardView: View {
                 .font(.headline)
 
             // NOTE: For zelfstandigenaftrek, ALL worked hours count (including admin, training)
-            // This is per Dutch tax law - not just billable hours
+            // BUT standby/achterwacht hours do NOT count - only actual work hours
             let target = Decimal(settings.first?.urendrempelZelfstandigenaftrek ?? 1225)
-            let current = yearEntries.totalHours
-            let progress = min(current / target, 1.0)
-            let remaining = max(target - current, 0)
+            let workingHours = yearEntries.totalWorkingHours
+            let standbyHours = yearEntries.totalStandbyHours
+            let progress = min(workingHours / target, 1.0)
+            let remaining = max(target - workingHours, 0)
 
             VStack(spacing: 16) {
                 // Circular Progress
@@ -206,14 +207,14 @@ struct DashboardView: View {
                     VStack(spacing: 4) {
                         Text("\(Int(truncating: (progress * 100) as NSDecimalNumber))%")
                             .font(.system(size: 36, weight: .bold))
-                        Text("\(current.asDecimal) uur")
+                        Text("\(workingHours.asDecimal) uur")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .frame(width: 150, height: 150)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Zelfstandigenaftrek voortgang: \(Int(truncating: (progress * 100) as NSDecimalNumber)) procent, \(current.asDecimal) van \(target.asDecimal) uren")
+                .accessibilityLabel("Zelfstandigenaftrek voortgang: \(Int(truncating: (progress * 100) as NSDecimalNumber)) procent, \(workingHours.asDecimal) van \(target.asDecimal) uren")
                 .accessibilityValue(progress >= 1 ? "Drempel behaald" : "Nog \(remaining.asDecimal) uur nodig")
 
                 if progress >= 1 {
@@ -224,6 +225,18 @@ struct DashboardView: View {
                     Text("Nog \(remaining.asDecimal) uur nodig")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                }
+
+                // Show non-working hours separately if any
+                if standbyHours > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.badge.xmark")
+                            .foregroundStyle(.purple)
+                        Text("\(standbyHours.asDecimal) uur (geen werkuren)")
+                            .font(.caption)
+                            .foregroundStyle(.purple)
+                    }
+                    .help("Uren die niet meetellen voor het urencriterium (bijv. achterwacht, toeslagen)")
                 }
             }
             .frame(maxWidth: .infinity)
@@ -365,6 +378,14 @@ struct DashboardView: View {
     private var kmRevenueText: String {
         let kmRevenue = yearEntries.reduce(Decimal(0)) { $0 + $1.totaalbedragKm }
         return kmRevenue.asCurrency
+    }
+
+    private var standbyHoursSubtitle: String {
+        let standby = yearEntries.totalStandbyHours
+        if standby > 0 {
+            return "+ \(standby.asDecimal) overig"
+        }
+        return "van \(settings.first?.urendrempelZelfstandigenaftrek ?? 1225)"
     }
 
     private var openstandingColor: Color {

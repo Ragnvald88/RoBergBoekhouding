@@ -22,6 +22,7 @@ struct TimeEntryFormView: View {
     @State private var uurtarief: Decimal = 70.00
     @State private var kmtarief: Decimal = 0.23
     @State private var isBillable: Bool = true
+    @State private var isStandby: Bool = false
     @State private var opmerkingen: String = ""
     @State private var showingDeleteAlert: Bool = false
 
@@ -88,6 +89,16 @@ struct TimeEntryFormView: View {
                     }
 
                     Toggle("Factureerbaar", isOn: $isBillable)
+
+                    Toggle(isOn: $isStandby) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Geen werkuren")
+                            Text("Bijv. achterwacht, toeslag, bereikbaarheid - telt niet mee voor urencriterium")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .help("Vink aan als deze uren niet meetellen voor de 1.225 uur zelfstandigenaftrek")
                 }
 
                 // Kilometers Section
@@ -206,6 +217,16 @@ struct TimeEntryFormView: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
+
+            if isStandby {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock.badge.xmark")
+                        .foregroundStyle(.purple)
+                    Text("Geen werkuren - telt niet mee voor urencriterium (1.225 uur)")
+                        .font(.caption)
+                        .foregroundStyle(.purple)
+                }
+            }
         }
     }
 
@@ -315,6 +336,7 @@ struct TimeEntryFormView: View {
         uurtarief = entry.uurtarief
         kmtarief = entry.kilometertarief
         isBillable = entry.isBillable
+        isStandby = entry.isStandby
         opmerkingen = entry.opmerkingen ?? ""
     }
 
@@ -332,6 +354,7 @@ struct TimeEntryFormView: View {
             entry.uurtarief = uurtarief
             entry.kilometertarief = kmtarief
             entry.isBillable = isBillable
+            entry.isStandby = isStandby
             entry.opmerkingen = opmerkingen.isEmpty ? nil : opmerkingen
             entry.updateTimestamp()
         } else {
@@ -348,6 +371,7 @@ struct TimeEntryFormView: View {
                 kilometertarief: kmtarief,
                 opmerkingen: opmerkingen.isEmpty ? nil : opmerkingen,
                 isBillable: isBillable,
+                isStandby: isStandby,
                 client: selectedClient
             )
             modelContext.insert(newEntry)

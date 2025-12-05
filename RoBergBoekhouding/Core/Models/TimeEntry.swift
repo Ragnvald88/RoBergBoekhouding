@@ -18,6 +18,8 @@ final class TimeEntry {
     var isBillable: Bool                // False for Admin/NSCHL
     var isInvoiced: Bool                // True if included in an invoice
     var factuurnummer: String?          // Invoice number if invoiced
+    var isStandby: Bool                 // True for achterwacht/standby hours (don't count for zelfstandigenaftrek)
+    var dienstCode: String?             // ANW dienst code: "AW-WK-H", "SAV*", etc.
     var createdAt: Date
     var updatedAt: Date
 
@@ -68,6 +70,26 @@ final class TimeEntry {
         return "\(activiteit) - \(locatie)"
     }
 
+    /// Hours that count for zelfstandigenaftrek (excludes standby hours)
+    /// Note: ALL hours count (billable + non-billable like admin), except standby
+    var workingHours: Decimal {
+        isStandby ? 0 : uren
+    }
+
+    /// Whether this is an ANW dienst entry
+    var isANWDienst: Bool {
+        dienstCode != nil
+    }
+
+    /// Formatted dienst info for display
+    var dienstInfo: String? {
+        guard let code = dienstCode else { return nil }
+        if isStandby {
+            return "\(code) (achterwacht)"
+        }
+        return code
+    }
+
     // MARK: - Initializer
     init(
         id: UUID = UUID(),
@@ -84,6 +106,8 @@ final class TimeEntry {
         isBillable: Bool = true,
         isInvoiced: Bool = false,
         factuurnummer: String? = nil,
+        isStandby: Bool = false,
+        dienstCode: String? = nil,
         client: Client? = nil
     ) {
         self.id = id
@@ -103,6 +127,8 @@ final class TimeEntry {
         self.isBillable = isBillable
         self.isInvoiced = isInvoiced
         self.factuurnummer = factuurnummer
+        self.isStandby = isStandby
+        self.dienstCode = dienstCode
         self.client = client
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -195,7 +221,7 @@ extension [TimeEntry] {
         filter { !$0.isInvoiced }
     }
 
-    /// Total hours
+    /// Total hours (all hours including standby)
     var totalHours: Decimal {
         reduce(0) { $0 + $1.uren }
     }
@@ -203,6 +229,26 @@ extension [TimeEntry] {
     /// Total billable hours
     var totalBillableHours: Decimal {
         billableOnly.reduce(0) { $0 + $1.uren }
+    }
+
+    /// Total working hours (for zelfstandigenaftrek - excludes standby)
+    var totalWorkingHours: Decimal {
+        reduce(0) { $0 + $1.workingHours }
+    }
+
+    /// Total standby hours (achterwacht)
+    var totalStandbyHours: Decimal {
+        filter { $0.isStandby }.reduce(0) { $0 + $1.uren }
+    }
+
+    /// Filter to standby entries only
+    var standbyOnly: [TimeEntry] {
+        filter { $0.isStandby }
+    }
+
+    /// Filter to non-standby entries only
+    var excludingStandby: [TimeEntry] {
+        filter { !$0.isStandby }
     }
 
     /// Total kilometers

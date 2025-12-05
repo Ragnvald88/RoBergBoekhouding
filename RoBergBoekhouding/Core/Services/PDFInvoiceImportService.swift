@@ -89,12 +89,47 @@ class PDFInvoiceImportService {
 
         // Create time entries from line items
         var entriesCreated = 0
+        var entriesSkipped = 0
+
         for item in parsedInvoice.lineItems {
             // Check if this is an hours entry (not km)
             if item.isHoursEntry {
+                // Check for duplicate time entry (same date, same client, same hours)
+                let itemDate = item.date
+                let startOfDay = Calendar.current.startOfDay(for: itemDate)
+                guard let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay) else {
+                    continue
+                }
+
+                // Check if entry already exists for this date/client/hours combination
+                let clientId = client?.id
+                let itemHours = item.quantity
+                let duplicateDescriptor = FetchDescriptor<TimeEntry>(
+                    predicate: #Predicate<TimeEntry> { entry in
+                        entry.datum >= startOfDay &&
+                        entry.datum < endOfDay &&
+                        entry.client?.id == clientId &&
+                        entry.uren == itemHours
+                    }
+                )
+
+                if let existingEntries = try? modelContext.fetch(duplicateDescriptor), !existingEntries.isEmpty {
+                    // Skip duplicate entry
+                    entriesSkipped += 1
+                    continue
+                }
+
+                // Determine activity code based on type
+                let activityCode: String
+                if let dienstCode = item.dienstCode {
+                    activityCode = "ANW_\(dienstCode)"
+                } else {
+                    activityCode = "WDAGPRAKTIJK_\(Int(truncating: item.rate as NSDecimalNumber))"
+                }
+
                 let entry = TimeEntry(
                     datum: item.date,
-                    code: "WDAGPRAKTIJK_\(Int(truncating: item.rate as NSDecimalNumber))",
+                    code: activityCode,
                     activiteit: item.description,
                     locatie: parsedInvoice.clientLocation,
                     uren: item.quantity,
@@ -106,6 +141,8 @@ class PDFInvoiceImportService {
                     isBillable: true,
                     isInvoiced: true,
                     factuurnummer: parsedInvoice.invoiceNumber,
+                    isStandby: item.isStandby,
+                    dienstCode: item.dienstCode,
                     client: client
                 )
                 entry.invoice = invoice
@@ -147,10 +184,16 @@ class PDFInvoiceImportService {
 
         try modelContext.save()
 
+        // Build result message
+        var message = "Factuur \(parsedInvoice.invoiceNumber) geïmporteerd"
+        if entriesSkipped > 0 {
+            message += " (\(entriesSkipped) dubbele entries overgeslagen)"
+        }
+
         return PDFImportResult(
             success: true,
             invoiceNumber: parsedInvoice.invoiceNumber,
-            message: "Factuur \(parsedInvoice.invoiceNumber) geïmporteerd",
+            message: message,
             timeEntriesCreated: entriesCreated,
             totalAmount: parsedInvoice.totalAmount
         )
@@ -188,20 +231,86 @@ class PDFInvoiceImportService {
         return results
     }
 
+    // MARK: - Invoice Format Detection
+
+    private enum InvoiceFormat {
+        case formatA_vertical       // 2025-002: "9x" quantity, "Datum: 9 januari 2025" on separate line
+        case formatB_slashDates     // 2025-001, 2025-003, 2025-005: "13/01/2025", hours+km same row
+        case formatC_kmColumn       // 2025-008: km as separate column "Afstand woon-werk"
+        case formatD_dashDates      // 2025-009, 2025-016: dashes, hours+km same row with Reiskosten
+        case formatE_separateLines  // 2025-019, 2025-020: hours and km on separate rows
+        case formatANW_dienst       // ANW dienst invoices from Dokter Drenthe, Doktersdienst Groningen
+    }
+
+    private func detectFormat(from lines: [String]) -> InvoiceFormat {
+        let joinedText = lines.prefix(50).joined(separator: " ")
+
+        // ANW Format: Dokter Drenthe or Doktersdienst Groningen with "UREN SPECIFICATIE" table
+        if (joinedText.contains("Dokter Drenthe") || joinedText.contains("Doktersdienst Groningen") ||
+            joinedText.contains("Doktersdienst Noord")) &&
+           (joinedText.contains("UREN SPECIFICATIE") || joinedText.contains("Dienst ID")) {
+            return .formatANW_dienst
+        }
+
+        // Format A: has "Datum:" followed by Dutch month name
+        if joinedText.contains("Datum:") && (joinedText.contains("januari") || joinedText.contains("februari") ||
+            joinedText.contains("maart") || joinedText.contains("april") || joinedText.contains("mei")) {
+            return .formatA_vertical
+        }
+
+        // Format C: has "Afstand woon-werk" column
+        if joinedText.contains("Afstand") && joinedText.contains("woon-werk") {
+            return .formatC_kmColumn
+        }
+
+        // Format E: look for "Kilometers woon-werk" or "uren" in description (separate lines pattern)
+        if joinedText.contains("Kilometers woon-werk") || joinedText.contains("dagpraktijk uren") {
+            return .formatE_separateLines
+        }
+
+        // Check date format in table rows
+        for line in lines {
+            // Slash date format
+            if let _ = extractPattern(from: line, pattern: "^\\s*[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}") {
+                return .formatB_slashDates
+            }
+            // Dash date format at start of line
+            if let _ = extractPattern(from: line, pattern: "^\\s*[0-9]{1,2}-[0-9]{1,2}-[0-9]{2,4}\\s+Waarneming") {
+                return .formatD_dashDates
+            }
+        }
+
+        // Default to format D (most common recent format)
+        return .formatD_dashDates
+    }
+
     // MARK: - Parse Invoice Text
 
     private func parseInvoiceText(_ text: String, fileName: String) throws -> ParsedInvoice {
         let lines = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }
+        let format = detectFormat(from: lines)
 
         // Extract invoice number
         var invoiceNumber: String?
         for line in lines {
-            // Try different patterns
+            // Try different patterns - order matters!
+
+            // ANW format: "FACTUURNUMMER : 22470-25-16" (note space before colon)
+            if let match = extractPattern(from: line, pattern: "FACTUURNUMMER\\s*:\\s*([0-9]+-[0-9]+-[0-9]+)") {
+                invoiceNumber = match
+                break
+            }
+
+            // Standard formats: "Nummer: 2025-001" or "Factuurnummer: 2025-001"
             if let match = extractPattern(from: line, pattern: "Nummer:\\s*([0-9]{4}-[0-9]{3})") {
                 invoiceNumber = match
                 break
             }
             if let match = extractPattern(from: line, pattern: "Factuurnummer:\\s*([0-9]{4}-[0-9]{3})") {
+                invoiceNumber = match
+                break
+            }
+            if let match = extractPattern(from: line, pattern: "Factuur\\s+([0-9]{4}-[0-9]{3})") {
                 invoiceNumber = match
                 break
             }
@@ -213,6 +322,8 @@ class PDFInvoiceImportService {
 
         // Try to get from filename if not found
         if invoiceNumber == nil {
+            // Try ANW format in filename (e.g., "0125_Dokter Drenthe.pdf" -> extract from content)
+            // Or standard format "2025-001_Raupp.pdf"
             if let match = extractPattern(from: fileName, pattern: "([0-9]{4}-[0-9]{3})") {
                 invoiceNumber = match
             }
@@ -222,25 +333,24 @@ class PDFInvoiceImportService {
             throw PDFImportError.cannotParseInvoiceNumber
         }
 
-        // Extract invoice date - PDF text extraction may split label and date
+        // Extract invoice date - supports both / and - separators
         var invoiceDate = Date()
         var foundDate = false
 
         for (index, line) in lines.enumerated() {
-            // Pattern 1: Date on same line as label
             if line.lowercased().contains("factuurdatum") {
-                // Try to extract date from same line
-                if let match = extractPattern(from: line, pattern: "([0-9]{1,2}-[0-9]{1,2}-[0-9]{4})") {
+                // Try both date formats
+                if let match = extractPattern(from: line, pattern: "([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{4})") {
                     if let date = parseDate(match) {
                         invoiceDate = date
                         foundDate = true
                         break
                     }
                 }
-                // If not on same line, check next few lines for a date
+                // If not on same line, check next few lines
                 for nextIndex in (index + 1)..<min(index + 3, lines.count) {
                     let nextLine = lines[nextIndex]
-                    if let match = extractPattern(from: nextLine, pattern: "([0-9]{1,2}-[0-9]{1,2}-[0-9]{4})") {
+                    if let match = extractPattern(from: nextLine, pattern: "([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{4})") {
                         if let date = parseDate(match) {
                             invoiceDate = date
                             foundDate = true
@@ -252,12 +362,11 @@ class PDFInvoiceImportService {
             }
         }
 
-        // Fallback: look for any date pattern near the top of the document
+        // Fallback: look for any date pattern near the top
         if !foundDate {
             for line in lines.prefix(30) {
-                if let match = extractPattern(from: line, pattern: "([0-9]{2}-[0-9]{2}-[0-9]{4})") {
+                if let match = extractPattern(from: line, pattern: "([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{4})") {
                     if let date = parseDate(match) {
-                        // Sanity check: date should be in reasonable range (not future, not too old)
                         let calendar = Calendar.current
                         let yearOfDate = calendar.component(.year, from: date)
                         if yearOfDate >= 2020 && yearOfDate <= calendar.component(.year, from: Date()) + 1 {
@@ -295,18 +404,18 @@ class PDFInvoiceImportService {
 
         // If no "Factuur aan:" found, try to find client from known patterns
         if clientLines.isEmpty {
-            for line in lines {
+            for (idx, line) in lines.enumerated() {
                 if line.contains("Huisartspraktijk") || line.contains("Huisartsenpraktijk") ||
-                   line.contains("Doktersdienst") || line.contains("Dokter Drenthe") {
+                   line.contains("Doktersdienst") || line.contains("Dokter Drenthe") ||
+                   line.contains("S. Borgemeester") {
                     clientLines.append(line)
                     // Get next few lines for address
-                    if let idx = lines.firstIndex(of: line) {
-                        for i in 1...3 {
-                            if idx + i < lines.count {
-                                let nextLine = lines[idx + i]
-                                if !nextLine.isEmpty && !nextLine.contains("Bastion") && !nextLine.contains("RoBerg") {
-                                    clientLines.append(nextLine)
-                                }
+                    for i in 1...3 {
+                        if idx + i < lines.count {
+                            let nextLine = lines[idx + i]
+                            if !nextLine.isEmpty && !nextLine.contains("Bastion") && !nextLine.contains("RoBerg") &&
+                               !nextLine.contains("FACTUUR") && !nextLine.contains("Ronald") {
+                                clientLines.append(nextLine)
                             }
                         }
                     }
@@ -321,13 +430,17 @@ class PDFInvoiceImportService {
         }
         if clientLines.count > 1 {
             // Check if second line is contact person or address
-            if clientLines[1].contains("G.E.M.") || clientLines[1].contains("M.") ||
-               clientLines[1].split(separator: " ").count <= 3 && !clientLines[1].contains(where: { $0.isNumber }) {
-                clientContact = clientLines[1]
+            let secondLine = clientLines[1]
+            let isContactPerson = secondLine.contains("G.E.M.") || secondLine.contains("M.") ||
+                secondLine.contains("T.a.v.") || secondLine.contains("F.G.") ||
+                (secondLine.split(separator: " ").count <= 3 && !secondLine.contains(where: { $0.isNumber }))
+
+            if isContactPerson {
+                clientContact = secondLine.replacingOccurrences(of: "T.a.v. ", with: "")
                 if clientLines.count > 2 { clientAddress = clientLines[2] }
                 if clientLines.count > 3 { clientPostcode = clientLines[3] }
             } else {
-                clientAddress = clientLines[1]
+                clientAddress = secondLine
                 if clientLines.count > 2 { clientPostcode = clientLines[2] }
             }
         }
@@ -337,52 +450,20 @@ class PDFInvoiceImportService {
             clientLocation = location
         }
 
-        // Parse line items
-        var lineItems: [ParsedLineItem] = []
-
-        // Find table section
-        var inTable = false
-        var currentDate: Date?
-
-        for line in lines {
-            // Detect table start
-            if line.contains("Datum") && (line.contains("Omschrijving") || line.contains("Tarief")) {
-                inTable = true
-                continue
-            }
-
-            // Detect table end
-            if inTable && (line.contains("TOTAAL") || line.contains("Totaal uren") || line.contains("Betaalinformatie")) {
-                break
-            }
-
-            if inTable && !line.isEmpty {
-                // Try to parse as line item
-                if let item = parseLineItem(line, currentDate: currentDate) {
-                    if item.date != currentDate {
-                        currentDate = item.date
-                    }
-                    lineItems.append(item)
-                }
-            }
-        }
+        // Parse line items based on detected format
+        let lineItems = parseLineItems(from: lines, format: format)
 
         // Extract total - PRIORITY: "Te betalen bedrag" over "TOTAAL"
-        // For split invoices (deelbetaling), "Te betalen bedrag" is the actual amount
         var totalAmount: Decimal = 0
         var foundTeBetalen = false
 
-        // First pass: look for "Te betalen bedrag" (highest priority)
-        // PDF text extraction may put label and value on same or different lines
         for (index, line) in lines.enumerated() {
             if line.lowercased().contains("te betalen bedrag") {
-                // Try to extract amount from same line
                 if let amount = extractCurrency(from: line) {
                     totalAmount = amount
                     foundTeBetalen = true
                     break
                 }
-                // If not on same line, check next few lines for euro amount
                 for nextIndex in (index + 1)..<min(index + 4, lines.count) {
                     let nextLine = lines[nextIndex]
                     if let amount = extractCurrency(from: nextLine) {
@@ -390,7 +471,6 @@ class PDFInvoiceImportService {
                         foundTeBetalen = true
                         break
                     }
-                    // Stop if we hit another label
                     if nextLine.contains(":") && !nextLine.contains("€") {
                         break
                     }
@@ -399,12 +479,11 @@ class PDFInvoiceImportService {
             }
         }
 
-        // Second pass: only if "Te betalen bedrag" not found, look for TOTAAL
         if !foundTeBetalen {
             for line in lines {
                 if (line.contains("TOTAAL") || line.contains("Totaal")) && line.contains("€") {
-                    // Skip lines that are subtotals (like "Totaal uren")
-                    if line.contains("uren") || line.contains("km") || line.contains("kilometer") {
+                    if line.lowercased().contains("uren") || line.lowercased().contains("km") ||
+                       line.lowercased().contains("kilometer") {
                         continue
                     }
                     if let amount = extractCurrency(from: line) {
@@ -415,9 +494,8 @@ class PDFInvoiceImportService {
             }
         }
 
-        // Calculate total from line items if still not found
         if totalAmount == 0 {
-            totalAmount = lineItems.reduce(0) { $0 + $1.total }
+            totalAmount = lineItems.filter { $0.isHoursEntry }.reduce(0) { $0 + $1.total }
         }
 
         return ParsedInvoice(
@@ -433,87 +511,565 @@ class PDFInvoiceImportService {
         )
     }
 
-    private func parseLineItem(_ line: String, currentDate: Date?) -> ParsedLineItem? {
-        // Try to extract date from line
-        var itemDate = currentDate ?? Date()
+    // MARK: - Parse Line Items (Format-aware)
 
-        // Pattern for date at start: "04-11-2025" or "15-12-23"
-        if let dateMatch = extractPattern(from: line, pattern: "^([0-9]{1,2}-[0-9]{1,2}-[0-9]{2,4})") {
-            if let date = parseDate(dateMatch) {
-                itemDate = date
+    private func parseLineItems(from lines: [String], format: InvoiceFormat) -> [ParsedLineItem] {
+        var items: [ParsedLineItem] = []
+        var inTable = false
+        var currentDate: Date?
+        var lastHoursItem: ParsedLineItem?
+
+        for (index, line) in lines.enumerated() {
+            // Detect table start
+            if line.contains("Datum") && (line.contains("Omschrijving") || line.contains("Tarief") || line.contains("Bedrag")) {
+                inTable = true
+                continue
+            }
+
+            // Detect table end
+            if inTable && (line.contains("TOTAAL") || line.contains("Totaalbedrag") ||
+                           line.contains("Betaalinformatie") || line.contains("Vrijgesteld") ||
+                           line.contains("Gelieve deze factuur")) {
+                break
+            }
+
+            guard inTable && !line.isEmpty else { continue }
+
+            switch format {
+            case .formatA_vertical:
+                // Format A: "9x  Waarneming Dagpraktijk  € 77,50  € 697,50" followed by "Datum: 9 januari 2025"
+                if let item = parseFormatA(line: line, nextLines: Array(lines.suffix(from: min(index + 1, lines.count)))) {
+                    items.append(item)
+                }
+
+            case .formatB_slashDates:
+                // Format B: "13/01/2025  Waarneming dagpraktijk  8,5  € 77,50  € 12,42  € 658,75"
+                if let item = parseFormatB(line: line, currentDate: currentDate) {
+                    currentDate = item.date
+                    items.append(item)
+                }
+
+            case .formatC_kmColumn:
+                // Format C: "27-02-2025  Waarneming dagpraktijk  9  € 77,50  54  € 12,42  € 709,92"
+                if let item = parseFormatC(line: line, currentDate: currentDate) {
+                    currentDate = item.date
+                    items.append(item)
+                }
+
+            case .formatD_dashDates:
+                // Format D: "07/01/2025  Waarneming dagpraktijk  9,00  € 77,50  € 24,84  € 722,34"
+                if let item = parseFormatD(line: line, currentDate: currentDate) {
+                    currentDate = item.date
+                    items.append(item)
+                }
+
+            case .formatE_separateLines:
+                // Format E: Hours and km on separate lines
+                let result = parseFormatE(line: line, currentDate: currentDate, lastHoursItem: lastHoursItem)
+                if let item = result.item {
+                    if item.isHoursEntry {
+                        currentDate = item.date
+                        lastHoursItem = item
+                    }
+                    items.append(item)
+                }
+
+            case .formatANW_dienst:
+                // Format ANW: Dokter Drenthe / Doktersdienst Groningen dienst table
+                if let parsedItems = parseFormatANW(line: line, currentDate: currentDate) {
+                    for item in parsedItems {
+                        currentDate = item.date
+                        items.append(item)
+                    }
+                }
             }
         }
 
-        // Determine if this is hours or km
-        let isHours = line.contains("Waarneming") || line.contains("Uren") || line.contains("dagpraktijk")
-        let isKm = line.contains("Reiskosten") || line.contains("Kilometer") || line.contains("km") || line.contains("Afstand")
+        return items
+    }
+
+    // MARK: - Format-specific Parsers
+
+    /// Format A: Vertical layout with "9x" quantity and "Datum: 9 januari 2025" on next line
+    private func parseFormatA(line: String, nextLines: [String]) -> ParsedLineItem? {
+        // Look for "9x" pattern at start
+        guard let quantityMatch = extractPattern(from: line, pattern: "^([0-9]+)x?\\s") else { return nil }
+        guard let quantity = Decimal(string: quantityMatch) else { return nil }
+
+        let isHours = line.contains("Waarneming") || line.contains("Dagpraktijk") || line.contains("dagpraktijk")
+        let isKm = line.contains("Reiskosten") || line.contains("Kilometer")
 
         guard isHours || isKm else { return nil }
 
-        // Extract numbers from the line
-        let numbers = extractAllNumbers(from: line)
+        // Find date from "Datum: X januari 2025" in next lines
+        var itemDate = Date()
+        for nextLine in nextLines.prefix(2) {
+            if nextLine.contains("Datum:") {
+                if let date = parseDutchTextDate(nextLine) {
+                    itemDate = date
+                }
+                break
+            }
+        }
 
-        // We need at least quantity, rate, total
-        guard numbers.count >= 2 else { return nil }
+        // Extract rate and total
+        let numbers = extractCurrencyValues(from: line)
 
-        // Parse based on type
-        var quantity: Decimal = 0
         var rate: Decimal = 0
         var total: Decimal = 0
 
-        // For hours: typically 9, 70.00, 630.00 or similar
-        // For km: typically 108, 0.23, 24.84 or similar
-
         if isHours {
-            // Hours quantity is usually single/double digit
-            for num in numbers {
-                if num <= 24 && num > 0 && quantity == 0 {
-                    quantity = num
-                } else if num >= 50 && num <= 200 && rate == 0 {
-                    // Hourly rate range
-                    rate = num
-                } else if num > 200 && total == 0 {
-                    total = num
-                }
-            }
+            rate = numbers.first { $0 >= 50 && $0 <= 150 } ?? 77.50
+            total = numbers.first { $0 > 150 } ?? (quantity * rate)
         } else {
-            // Kilometers
-            for num in numbers {
-                if num >= 10 && num <= 500 && quantity == 0 {
-                    // km range
-                    quantity = num
-                } else if num < 1 && rate == 0 {
-                    // km rate (0.21, 0.23)
-                    rate = num
-                } else if num > 1 && num < 100 && total == 0 {
-                    total = num
-                }
-            }
+            rate = numbers.first { $0 < 1 } ?? 0.23
+            total = numbers.first { $0 > 1 && $0 < 100 } ?? (quantity * rate)
         }
-
-        // Validate we have meaningful data
-        guard quantity > 0 else { return nil }
-
-        // Calculate total if not found
-        if total == 0 && rate > 0 {
-            total = quantity * rate
-        }
-
-        // Estimate rate if not found (guard against division by zero)
-        if rate == 0 && total > 0 && quantity > 0 {
-            rate = total / quantity
-        }
-
-        let description = isHours ? "Waarneming dagpraktijk" : "Reiskosten"
 
         return ParsedLineItem(
             date: itemDate,
-            description: description,
+            description: isHours ? "Waarneming dagpraktijk" : "Reiskosten",
             quantity: quantity,
             rate: rate,
             total: total,
             isHoursEntry: isHours
         )
+    }
+
+    /// Format B: Slash dates with hours+km combined - "13/01/2025  Waarneming  8,5  € 77,50  € 12,42  € 658,75"
+    private func parseFormatB(line: String, currentDate: Date?) -> ParsedLineItem? {
+        var itemDate = currentDate ?? Date()
+
+        // Extract date with slashes at the START of line only
+        if let dateMatch = extractPattern(from: line, pattern: "^\\s*([0-9]{1,2}/[0-9]{1,2}/[0-9]{4})") {
+            if let date = parseDate(dateMatch) {
+                itemDate = date
+            }
+        }
+
+        // Must contain Waarneming for hours line
+        guard line.contains("Waarneming") || line.contains("dagpraktijk") else { return nil }
+
+        // Extract all currency values (€ prefixed numbers)
+        let currencyValues = extractCurrencyValues(from: line)
+
+        // Remove the date from line before extracting quantity
+        var lineWithoutDate = line
+        if let range = line.range(of: "^\\s*[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}\\s*", options: .regularExpression) {
+            lineWithoutDate = String(line[range.upperBound...])
+        }
+
+        // Extract quantity - look for number NOT preceded by € and before first €
+        var quantity: Decimal = 0
+        if let euroIndex = lineWithoutDate.firstIndex(of: "€") {
+            let beforeEuro = String(lineWithoutDate[..<euroIndex])
+            // Find decimal numbers like "8,5" or "9,00" or just "9"
+            if let qtyMatch = extractPattern(from: beforeEuro, pattern: "([0-9]+[,.]?[0-9]*)\\s*$") {
+                quantity = parseDecimal(qtyMatch) ?? 0
+            }
+        }
+
+        guard quantity > 0 && quantity <= 24 else { return nil }
+
+        // Rate is typically first currency value (77.50)
+        // Reiskosten is second currency value (12.42)
+        // Total is last currency value
+        let rate = currencyValues.first { $0 >= 50 && $0 <= 150 } ?? 77.50
+        let reiskosten = currencyValues.first { $0 > 5 && $0 < 50 } ?? 0
+        let total = currencyValues.last ?? (quantity * rate + reiskosten)
+
+        return ParsedLineItem(
+            date: itemDate,
+            description: "Waarneming dagpraktijk",
+            quantity: quantity,
+            rate: rate,
+            total: total,
+            isHoursEntry: true
+        )
+    }
+
+    /// Format C: km as separate column - "27-02-2025  Waarneming  9  € 77,50  54  € 12,42  € 709,92"
+    private func parseFormatC(line: String, currentDate: Date?) -> ParsedLineItem? {
+        var itemDate = currentDate ?? Date()
+
+        // Extract date with dashes at the START of line
+        if let dateMatch = extractPattern(from: line, pattern: "^\\s*([0-9]{1,2}-[0-9]{1,2}-[0-9]{2,4})") {
+            if let date = parseDate(dateMatch) {
+                itemDate = date
+            }
+        }
+
+        guard line.contains("Waarneming") || line.contains("dagpraktijk") else { return nil }
+
+        let currencyValues = extractCurrencyValues(from: line)
+
+        // Remove date from line
+        var lineWithoutDate = line
+        if let range = line.range(of: "^\\s*[0-9]{1,2}-[0-9]{1,2}-[0-9]{2,4}\\s*", options: .regularExpression) {
+            lineWithoutDate = String(line[range.upperBound...])
+        }
+
+        // Extract hours quantity (before first €)
+        var hours: Decimal = 0
+        if let euroIndex = lineWithoutDate.firstIndex(of: "€") {
+            let beforeEuro = String(lineWithoutDate[..<euroIndex])
+            let numbers = extractAllNumbers(from: beforeEuro)
+            hours = numbers.first { $0 > 0 && $0 <= 24 } ?? 0
+        }
+
+        guard hours > 0 else { return nil }
+
+        let rate = currencyValues.first { $0 >= 50 && $0 <= 150 } ?? 77.50
+        let total = currencyValues.last ?? (hours * rate)
+
+        return ParsedLineItem(
+            date: itemDate,
+            description: "Waarneming dagpraktijk",
+            quantity: hours,
+            rate: rate,
+            total: total,
+            isHoursEntry: true
+        )
+    }
+
+    /// Format D: Dash dates with hours+reiskosten same row - "07/01/2025  Waarneming  9,00  € 77,50  € 24,84  € 722,34"
+    private func parseFormatD(line: String, currentDate: Date?) -> ParsedLineItem? {
+        var itemDate = currentDate ?? Date()
+
+        // Extract date (both / and - formats) at START of line only
+        if let dateMatch = extractPattern(from: line, pattern: "^\\s*([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4})") {
+            if let date = parseDate(dateMatch) {
+                itemDate = date
+            }
+        } else {
+            // No date at start - might be a continuation line, skip it
+            if !line.hasPrefix(" ") && currentDate == nil {
+                return nil
+            }
+        }
+
+        guard line.contains("Waarneming") || line.contains("dagpraktijk") else { return nil }
+
+        let currencyValues = extractCurrencyValues(from: line)
+
+        // Remove date from line before extracting quantity
+        var lineWithoutDate = line
+        if let range = line.range(of: "^\\s*[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}\\s*", options: .regularExpression) {
+            lineWithoutDate = String(line[range.upperBound...])
+        }
+
+        // Find quantity between description and first €
+        var hours: Decimal = 0
+        if let euroIndex = lineWithoutDate.firstIndex(of: "€") {
+            let beforeEuro = String(lineWithoutDate[..<euroIndex])
+            // Look for the LAST number before € (that's the quantity)
+            if let qtyMatch = extractPattern(from: beforeEuro, pattern: "([0-9]+[,.]?[0-9]*)\\s*$") {
+                hours = parseDecimal(qtyMatch) ?? 0
+            }
+        }
+
+        guard hours > 0 && hours <= 24 else { return nil }
+
+        let rate = currencyValues.first { $0 >= 50 && $0 <= 150 } ?? 77.50
+        let total = currencyValues.last ?? (hours * rate)
+
+        return ParsedLineItem(
+            date: itemDate,
+            description: "Waarneming dagpraktijk",
+            quantity: hours,
+            rate: rate,
+            total: total,
+            isHoursEntry: true
+        )
+    }
+
+    /// Format E: Separate lines for hours and km
+    private func parseFormatE(line: String, currentDate: Date?, lastHoursItem: ParsedLineItem?) -> (item: ParsedLineItem?, updatedDate: Date?) {
+        var itemDate = currentDate ?? Date()
+
+        // Check if line starts with a date
+        let hasDate = extractPattern(from: line, pattern: "^\\s*([0-9]{1,2}-[0-9]{1,2}-[0-9]{2,4})") != nil
+
+        if hasDate {
+            if let dateMatch = extractPattern(from: line, pattern: "^\\s*([0-9]{1,2}-[0-9]{1,2}-[0-9]{2,4})") {
+                if let date = parseDate(dateMatch) {
+                    itemDate = date
+                }
+            }
+        }
+
+        // Determine line type
+        let isHoursLine = line.contains("Waarneming") || line.contains("dagpraktijk uren") ||
+                          (line.contains("HOED") && !line.contains("Reiskosten"))
+        let isKmLine = line.contains("Kilometer") || line.contains("Reiskosten") || line.contains("km")
+
+        if isHoursLine {
+            let currencyValues = extractCurrencyValues(from: line)
+
+            // Remove date from line
+            var lineWithoutDate = line
+            if let range = line.range(of: "^\\s*[0-9]{1,2}-[0-9]{1,2}-[0-9]{2,4}\\s*", options: .regularExpression) {
+                lineWithoutDate = String(line[range.upperBound...])
+            }
+
+            // Extract hours - number before first € but after description
+            var hours: Decimal = 0
+            if let euroIndex = lineWithoutDate.firstIndex(of: "€") {
+                let beforeEuro = String(lineWithoutDate[..<euroIndex])
+                // Get the last number before €
+                if let qtyMatch = extractPattern(from: beforeEuro, pattern: "([0-9]+[,.]?[0-9]*)\\s*$") {
+                    hours = parseDecimal(qtyMatch) ?? 0
+                }
+            }
+
+            guard hours > 0 && hours <= 24 else { return (nil, itemDate) }
+
+            let rate = currencyValues.first { $0 >= 50 && $0 <= 150 } ?? 77.50
+            let total = currencyValues.last ?? (hours * rate)
+
+            let item = ParsedLineItem(
+                date: itemDate,
+                description: "Waarneming dagpraktijk",
+                quantity: hours,
+                rate: rate,
+                total: total,
+                isHoursEntry: true
+            )
+            return (item, itemDate)
+
+        } else if isKmLine {
+            // Km line - uses date from previous hours entry
+            let kmDate = hasDate ? itemDate : (lastHoursItem?.date ?? currentDate ?? Date())
+            let currencyValues = extractCurrencyValues(from: line)
+
+            // Extract km quantity - look for number NOT in currency
+            var kmDistance: Decimal = 0
+            var lineForNumbers = line
+
+            // Remove date if present
+            if let range = line.range(of: "^\\s*[0-9]{1,2}-[0-9]{1,2}-[0-9]{2,4}\\s*", options: .regularExpression) {
+                lineForNumbers = String(line[range.upperBound...])
+            }
+
+            // Find number between description and € (the km distance)
+            if let euroIndex = lineForNumbers.firstIndex(of: "€") {
+                let beforeEuro = String(lineForNumbers[..<euroIndex])
+                if let kmMatch = extractPattern(from: beforeEuro, pattern: "([0-9]+)\\s*$") {
+                    kmDistance = Decimal(string: kmMatch) ?? 0
+                }
+            }
+
+            guard kmDistance >= 10 && kmDistance <= 500 else { return (nil, currentDate) }
+
+            let rate = currencyValues.first { $0 < 1 } ?? 0.23
+            let total = currencyValues.first { $0 > 1 && $0 < 100 } ?? (kmDistance * rate)
+
+            let item = ParsedLineItem(
+                date: kmDate,
+                description: "Reiskosten",
+                quantity: kmDistance,
+                rate: rate,
+                total: total,
+                isHoursEntry: false
+            )
+            return (item, currentDate)
+        }
+
+        return (nil, currentDate)
+    }
+
+    /// Format ANW: Dokter Drenthe / Doktersdienst Groningen dienst invoices
+    /// Line format: "506042  AW-WK-H  13-12-2024  17:00  00:00  7.00  Avond  € 6,72  Vrijgesteld  € 47,04"
+    /// May have continuation lines without dienst ID for multi-part shifts (Nacht portion)
+    private func parseFormatANW(line: String, currentDate: Date?) -> [ParsedLineItem]? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Skip header lines and totals
+        if trimmed.contains("Dienst ID") || trimmed.contains("Tarief Naam") ||
+           trimmed.starts(with: "Totaal") || trimmed.contains("TOTAAL") ||
+           trimmed.contains("SPECIFICATIE") || trimmed.contains("Vrijgesteld van") {
+            return nil
+        }
+
+        // Check if this line has currency values (indicates actual data row)
+        let currencyValues = extractCurrencyValues(from: line)
+        guard !currencyValues.isEmpty else { return nil }
+
+        var items: [ParsedLineItem] = []
+        let parts = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        guard parts.count >= 4 else { return nil }
+
+        var dienstCode: String?
+        var dateStr: String?
+        var hours: Decimal = 0
+        var rate: Decimal = 0
+        var total: Decimal = 0
+        var tariefNaam: String = ""
+        var isContinuationLine = false
+
+        // First part should be dienst ID (6 digits) or it's a continuation line
+        let firstPart = parts[0]
+
+        if firstPart.count == 6 && Int(firstPart) != nil {
+            // This is a new dienst entry
+            dienstCode = parts.count > 1 ? parts[1] : nil
+        } else if firstPart.contains(":") || firstPart == "00" {
+            // Continuation line - starts with time like "00:00"
+            isContinuationLine = true
+        }
+
+        // Find date (dd-mm-yyyy format) - only in main lines, not continuation
+        if !isContinuationLine {
+            for part in parts {
+                if let _ = extractPattern(from: part, pattern: "^([0-9]{2}-[0-9]{2}-[0-9]{4})$") {
+                    dateStr = part
+                    break
+                }
+            }
+        }
+
+        // Find hours value - look for decimal number that's not part of time (no colon context)
+        // Hours are typically after the times: "17:00  00:00  7.00"
+        var foundTime = false
+        for part in parts {
+            if part.contains(":") {
+                foundTime = true
+                continue
+            }
+            if part.contains("€") || part.contains("-") {
+                continue
+            }
+            // After finding time patterns, look for hours
+            if foundTime || isContinuationLine {
+                if let match = extractPattern(from: part, pattern: "^([0-9]+[,.]?[0-9]*)$") {
+                    if let decimal = parseDecimal(match) {
+                        if decimal > 0 && decimal <= 24 && hours == 0 {
+                            hours = decimal
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
+        // Find tarief naam (Avond, Nacht, Weekend, Feestdag)
+        let tariefNames = ["Avond", "Nacht", "Weekend", "Feestdag"]
+        for name in tariefNames {
+            if line.contains(name) {
+                tariefNaam = name
+                break
+            }
+        }
+
+        // Rate is typically the first currency value, total is the last
+        if currencyValues.count >= 2 {
+            rate = currencyValues[0]
+            total = currencyValues.last ?? 0
+        } else if currencyValues.count == 1 {
+            total = currencyValues[0]
+            if hours > 0 {
+                rate = total / hours
+            }
+        }
+
+        guard hours > 0 else { return nil }
+
+        // Parse the date - use currentDate for continuation lines
+        var itemDate = currentDate ?? Date()
+        if let dateString = dateStr, let date = parseDate(dateString) {
+            itemDate = date
+        }
+
+        // Determine if this is achterwacht (standby) based on dienst code or rate
+        // AW-* codes are achterwacht, rates < €50/hour indicate standby
+        // For continuation lines, use rate to determine (as they don't have dienst code)
+        let isStandby = (dienstCode?.hasPrefix("AW") == true) || (rate < 50)
+
+        // Build description
+        var description: String
+        if isStandby {
+            description = "Achterwacht \(tariefNaam)".trimmingCharacters(in: .whitespaces)
+        } else {
+            description = "ANW dienst \(tariefNaam)".trimmingCharacters(in: .whitespaces)
+        }
+        if description == "Achterwacht" || description == "ANW dienst" {
+            description = dienstCode ?? (isStandby ? "Achterwacht" : "ANW dienst")
+        }
+
+        let item = ParsedLineItem(
+            date: itemDate,
+            description: description,
+            quantity: hours,
+            rate: rate,
+            total: total,
+            isHoursEntry: true,
+            isStandby: isStandby,
+            dienstCode: dienstCode
+        )
+
+        items.append(item)
+
+        return items.isEmpty ? nil : items
+    }
+
+    // MARK: - Additional Helper Methods
+
+    /// Parse Dutch text date like "Datum: 9 januari 2025"
+    private func parseDutchTextDate(_ text: String) -> Date? {
+        let dutchMonths = [
+            "januari": 1, "februari": 2, "maart": 3, "april": 4,
+            "mei": 5, "juni": 6, "juli": 7, "augustus": 8,
+            "september": 9, "oktober": 10, "november": 11, "december": 12
+        ]
+
+        // Extract day number
+        guard let dayMatch = extractPattern(from: text, pattern: "([0-9]{1,2})\\s+[a-z]") else { return nil }
+        guard let day = Int(dayMatch) else { return nil }
+
+        // Find month
+        var month = 0
+        for (monthName, monthNum) in dutchMonths {
+            if text.lowercased().contains(monthName) {
+                month = monthNum
+                break
+            }
+        }
+        guard month > 0 else { return nil }
+
+        // Extract year
+        guard let yearMatch = extractPattern(from: text, pattern: "([0-9]{4})") else { return nil }
+        guard let year = Int(yearMatch) else { return nil }
+
+        var components = DateComponents()
+        components.day = day
+        components.month = month
+        components.year = year
+
+        return Calendar.current.date(from: components)
+    }
+
+    /// Extract all € currency values from a line
+    private func extractCurrencyValues(from text: String) -> [Decimal] {
+        var values: [Decimal] = []
+
+        // Pattern for € followed by number (handles Dutch format with comma as decimal)
+        let pattern = "€\\s*([0-9]+[.,]?[0-9]*)"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return values }
+
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, options: [], range: range)
+
+        for match in matches {
+            if let matchRange = Range(match.range(at: 1), in: text) {
+                let numStr = String(text[matchRange])
+                if let decimal = parseDecimal(numStr) {
+                    values.append(decimal)
+                }
+            }
+        }
+
+        return values
     }
 
     // MARK: - Helper Methods
@@ -577,6 +1133,9 @@ class PDFInvoiceImportService {
     }
 
     private func parseDate(_ string: String) -> Date? {
+        // Normalize separator: replace / with -
+        let normalized = string.replacingOccurrences(of: "/", with: "-")
+
         let formatters = [
             "dd-MM-yyyy",
             "d-M-yyyy",
@@ -588,7 +1147,7 @@ class PDFInvoiceImportService {
             let formatter = DateFormatter()
             formatter.dateFormat = format
             formatter.locale = Locale(identifier: "nl_NL")
-            if let date = formatter.date(from: string) {
+            if let date = formatter.date(from: normalized) {
                 // Handle 2-digit years
                 if format.contains("yy") && !format.contains("yyyy") {
                     let year = Calendar.current.component(.year, from: date)
@@ -729,6 +1288,20 @@ struct ParsedLineItem {
     let rate: Decimal
     let total: Decimal
     let isHoursEntry: Bool
+    let isStandby: Bool         // True for achterwacht (AW-*) diensten
+    let dienstCode: String?     // ANW dienst code like "AW-WK-H", "SAV*", etc.
+
+    init(date: Date, description: String, quantity: Decimal, rate: Decimal, total: Decimal,
+         isHoursEntry: Bool, isStandby: Bool = false, dienstCode: String? = nil) {
+        self.date = date
+        self.description = description
+        self.quantity = quantity
+        self.rate = rate
+        self.total = total
+        self.isHoursEntry = isHoursEntry
+        self.isStandby = isStandby
+        self.dienstCode = dienstCode
+    }
 }
 
 struct PDFImportResult {
