@@ -117,10 +117,15 @@ struct InvoiceListView: View {
                     }
                 }
                 .frame(width: 80)
+                .help("Filter op jaar")
 
-                Button("Nieuwe Factuur", systemImage: "plus") {
+                Button {
                     appState.showNewInvoice = true
+                } label: {
+                    Label("Nieuwe Factuur", systemImage: "plus")
                 }
+                .buttonStyle(.borderedProminent)
+                .help("Maak een nieuwe factuur (⇧⌘N)")
             }
         }
         .searchable(text: $appState.searchText, prompt: "Zoek factuur")

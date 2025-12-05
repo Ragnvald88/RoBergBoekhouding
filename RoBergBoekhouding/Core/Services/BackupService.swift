@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import AppKit
 
 // MARK: - Backup Service
 /// Service for creating and managing database backups
@@ -160,27 +161,25 @@ struct BackupData: Codable {
 struct ClientExport: Codable {
     let id: UUID
     let bedrijfsnaam: String
-    let naam: String?
+    let contactpersoon: String?
     let email: String?
     let telefoon: String?
-    let adres: String?
-    let postcode: String?
-    let plaats: String?
+    let adres: String
+    let postcodeplaats: String
     let clientType: String
     let isActive: Bool
-    let standaardUurtarief: Decimal?
-    let standaardKmTarief: Decimal?
-    let afstandRetour: Int?
+    let standaardUurtarief: Decimal
+    let standaardKmTarief: Decimal
+    let afstandRetour: Int
 
     init(from client: Client) {
         self.id = client.id
         self.bedrijfsnaam = client.bedrijfsnaam
-        self.naam = client.naam
+        self.contactpersoon = client.contactpersoon
         self.email = client.email
         self.telefoon = client.telefoon
         self.adres = client.adres
-        self.postcode = client.postcode
-        self.plaats = client.plaats
+        self.postcodeplaats = client.postcodeplaats
         self.clientType = client.clientTypeRaw
         self.isActive = client.isActive
         self.standaardUurtarief = client.standaardUurtarief
@@ -194,9 +193,9 @@ struct TimeEntryExport: Codable {
     let datum: Date
     let uren: Decimal
     let uurtarief: Decimal
-    let retourafstandWoonWerk: Decimal
-    let visiteKilometers: Decimal
-    let kmtarief: Decimal
+    let retourafstandWoonWerk: Int
+    let visiteKilometers: Decimal?
+    let kilometertarief: Decimal
     let activiteit: String
     let locatie: String
     let isBillable: Bool
@@ -211,7 +210,7 @@ struct TimeEntryExport: Codable {
         self.uurtarief = entry.uurtarief
         self.retourafstandWoonWerk = entry.retourafstandWoonWerk
         self.visiteKilometers = entry.visiteKilometers
-        self.kmtarief = entry.kmtarief
+        self.kilometertarief = entry.kilometertarief
         self.activiteit = entry.activiteit
         self.locatie = entry.locatie
         self.isBillable = entry.isBillable
@@ -254,7 +253,7 @@ struct ExpenseExport: Codable {
     let bedrag: Decimal
     let categorie: String
     let leverancier: String?
-    let zakelijkPercentage: Int
+    let zakelijkPercentage: Decimal
     let isRecurring: Bool
     let documentPath: String?
 
@@ -275,25 +274,29 @@ struct SettingsExport: Codable {
     let bedrijfsnaam: String
     let eigenaar: String
     let adres: String
+    let postcodeplaats: String
     let email: String
     let telefoon: String
     let kvkNummer: String
-    let btwNummer: String
+    let iban: String
+    let bank: String
     let standaardUurtariefDag: Decimal
     let standaardKilometertarief: Decimal
-    let betalingstermijn: Int
+    let standaardBetalingstermijn: Int
 
     init(from settings: BusinessSettings) {
         self.bedrijfsnaam = settings.bedrijfsnaam
         self.eigenaar = settings.eigenaar
         self.adres = settings.adres
+        self.postcodeplaats = settings.postcodeplaats
         self.email = settings.email
         self.telefoon = settings.telefoon
         self.kvkNummer = settings.kvkNummer
-        self.btwNummer = settings.btwNummer
+        self.iban = settings.iban
+        self.bank = settings.bank
         self.standaardUurtariefDag = settings.standaardUurtariefDag
         self.standaardKilometertarief = settings.standaardKilometertarief
-        self.betalingstermijn = settings.betalingstermijn
+        self.standaardBetalingstermijn = settings.standaardBetalingstermijn
     }
 }
 

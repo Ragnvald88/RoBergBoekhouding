@@ -114,9 +114,13 @@ struct ClientListView: View {
         .navigationTitle("Klanten")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Nieuwe Klant", systemImage: "plus") {
+                Button {
                     appState.showNewClient = true
+                } label: {
+                    Label("Nieuwe Klant", systemImage: "plus")
                 }
+                .buttonStyle(.borderedProminent)
+                .help("Voeg een nieuwe klant toe (⌘N)")
             }
         }
         .searchable(text: $appState.searchText, prompt: "Zoek klant")
@@ -128,6 +132,8 @@ struct ClientListView: View {
 
 // MARK: - Client Row
 struct ClientRow: View {
+    @EnvironmentObject var appState: AppState
+
     let client: Client
     var onNewClient: (() -> Void)?
     var onNewTimeEntry: ((Client) -> Void)?
@@ -197,9 +203,11 @@ struct ClientRow: View {
 
             if client.unbilledAmount > 0 {
                 Button {
-                    // This could navigate to invoice creation
+                    // Navigate to invoices and trigger new invoice creation
+                    appState.selectedSidebarItem = .facturen
+                    appState.showNewInvoice = true
                 } label: {
-                    Label("Factureer openstaande uren", systemImage: "doc.text")
+                    Label("Factureer openstaande uren (\(client.unbilledAmount.asCurrency))", systemImage: "doc.badge.plus")
                 }
             }
         }

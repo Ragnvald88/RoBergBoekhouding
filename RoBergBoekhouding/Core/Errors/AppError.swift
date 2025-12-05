@@ -174,7 +174,7 @@ struct ErrorAlert: Identifiable {
 
     var title: String {
         switch error {
-        case .dataCorruption, .databaseInitFailed:
+        case .dataCorruption, .databaseInitFailed, .saveFailed, .deleteFailed, .fetchFailed:
             return "Databasefout"
         case .pdfGenerationFailed, .pdfRenderTimeout, .pdfSaveFailed, .pdfNotFound:
             return "PDF Fout"

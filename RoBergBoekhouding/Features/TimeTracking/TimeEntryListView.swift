@@ -200,11 +200,16 @@ struct TimeEntryListView: View {
                     }
                 }
                 .frame(width: 120)
+                .help("Filter op maand")
 
-                Button("Nieuwe Registratie", systemImage: "plus") {
+                Button {
                     appState.selectedTimeEntry = nil
                     appState.showNewTimeEntry = true
+                } label: {
+                    Label("Nieuwe Registratie", systemImage: "plus")
                 }
+                .buttonStyle(.borderedProminent)
+                .help("Registreer nieuwe uren (⌘N)")
             }
         }
         .searchable(text: $appState.searchText, prompt: "Zoek op klant of locatie")

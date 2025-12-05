@@ -116,10 +116,15 @@ struct ExpenseListView: View {
                     }
                 }
                 .frame(width: 120)
+                .help("Filter op maand")
 
-                Button("Nieuwe Uitgave", systemImage: "plus") {
+                Button {
                     appState.showNewExpense = true
+                } label: {
+                    Label("Nieuwe Uitgave", systemImage: "plus")
                 }
+                .buttonStyle(.borderedProminent)
+                .help("Registreer een nieuwe uitgave (⌥⌘N)")
             }
         }
         .onChange(of: appState.selectedYear) { _, _ in

@@ -97,12 +97,18 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle("Uurwerker")
-        .toolbar {
-            ToolbarItem {
-                Button(action: { appState.showImportSheet = true }) {
-                    Label("Importeren", systemImage: "square.and.arrow.down")
-                }
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                appState.showImportSheet = true
+            } label: {
+                Label("Importeren", systemImage: "square.and.arrow.down")
+                    .font(.caption)
             }
+            .buttonStyle(.borderless)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+            .help("Importeer klanten, uren of facturen (⌘I)")
         }
     }
 }

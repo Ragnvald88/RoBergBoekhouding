@@ -318,30 +318,41 @@ struct ImportView: View {
     }
 
     private var buttonsView: some View {
-        HStack {
-            if importResult != nil || !pdfImportResults.isEmpty {
-                Button("Nog een import") {
-                    importResult = nil
-                    pdfImportResults = []
-                    errorMessage = nil
-                }
+        HStack(spacing: 12) {
+            // Cancel/Close button - always visible
+            Button("Sluiten") {
+                dismiss()
             }
+            .keyboardShortcut(.escape, modifiers: [])
+            .help("Sluit dit venster (Esc)")
 
             Spacer()
 
-            if (importResult != nil && importResult!.imported > 0) ||
-               pdfImportResults.contains(where: { $0.success }) {
-                Button("Klaar") {
-                    dismiss()
+            // Reset button - only after import
+            if importResult != nil || !pdfImportResults.isEmpty {
+                Button {
+                    importResult = nil
+                    pdfImportResults = []
+                    errorMessage = nil
+                } label: {
+                    Label("Nog een import", systemImage: "arrow.counterclockwise")
                 }
-                .buttonStyle(.borderedProminent)
-            } else {
-                Button(selectedImportType == .pdfInvoices ? "Selecteer PDF's..." : "Selecteer bestand...") {
-                    showingFilePicker = true
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isImporting)
+                .buttonStyle(.bordered)
+                .help("Start een nieuwe import")
             }
+
+            // Primary action button
+            Button {
+                showingFilePicker = true
+            } label: {
+                Label(
+                    selectedImportType == .pdfInvoices ? "Selecteer PDF's" : "Selecteer bestand",
+                    systemImage: "folder"
+                )
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isImporting)
+            .help("Kies een bestand om te importeren")
         }
     }
 

@@ -62,10 +62,15 @@ struct SettingsView: View {
         .navigationTitle("Instellingen")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("Opslaan") {
+                Button {
                     saveSettings()
+                } label: {
+                    Label("Opslaan", systemImage: "checkmark")
                 }
+                .buttonStyle(.borderedProminent)
                 .disabled(!hasChanges)
+                .help("Sla wijzigingen op (⌘S)")
+                .keyboardShortcut("s", modifiers: .command)
             }
         }
         .onAppear(perform: loadSettings)
