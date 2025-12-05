@@ -55,11 +55,14 @@ struct ExpenseListView: View {
 
                 // List
                 if filteredExpenses.isEmpty {
-                    ContentUnavailableView(
-                        "Geen uitgaven",
-                        systemImage: "creditcard",
-                        description: Text("Klik op 'Nieuwe Uitgave' om te beginnen")
-                    )
+                    EmptyStateView(
+                        icon: "creditcard.fill",
+                        title: "Geen uitgaven",
+                        description: "Registreer je zakelijke uitgaven om ze mee te nemen in je boekhouding.",
+                        actionTitle: "Nieuwe uitgave"
+                    ) {
+                        appState.showNewExpense = true
+                    }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     List(filteredExpenses, selection: $selectedExpense) { expense in

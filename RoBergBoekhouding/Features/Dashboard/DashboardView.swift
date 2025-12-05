@@ -56,6 +56,8 @@ struct DashboardView: View {
                 Button("Nieuwe Registratie", systemImage: "plus") {
                     appState.showNewTimeEntry = true
                 }
+                .accessibilityLabel("Nieuwe tijdregistratie toevoegen")
+                .accessibilityHint("Opent formulier om nieuwe uren of kilometers te registreren")
             }
         }
         .sheet(isPresented: $appState.showNewTimeEntry) {
@@ -98,6 +100,8 @@ struct DashboardView: View {
                 icon: "eurosign.circle.fill",
                 color: .green
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Omzet dit jaar: \(yearEntries.totalRevenue.asCurrency). \(yearComparisonText)")
 
             // Hours YTD
             KPICardView(
@@ -107,6 +111,8 @@ struct DashboardView: View {
                 icon: "clock.fill",
                 color: .blue
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Uren dit jaar: \(yearEntries.totalHours.asDecimal) van \(settings.first?.urendrempelZelfstandigenaftrek ?? 1225)")
 
             // Kilometers YTD
             KPICardView(
@@ -116,6 +122,8 @@ struct DashboardView: View {
                 icon: "car.fill",
                 color: .orange
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Kilometers dit jaar: \(yearEntries.totalKilometers.formatted) kilometer. Kilometervergoeding: \(kmRevenueText)")
 
             // Outstanding
             KPICardView(
@@ -125,6 +133,8 @@ struct DashboardView: View {
                 icon: "doc.text.fill",
                 color: openstandingColor
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Openstaande facturen: \(yearInvoices.totalOutstanding.asCurrency) in \(yearInvoices.filterByStatus(.verzonden).count) facturen")
         }
     }
 
@@ -155,6 +165,8 @@ struct DashboardView: View {
                         }
                     }
                 }
+                .accessibilityLabel("Grafiek van maandelijkse omzet")
+                .accessibilityValue(revenueChartAccessibilityDescription)
             }
         }
         .padding()
@@ -200,6 +212,9 @@ struct DashboardView: View {
                     }
                 }
                 .frame(width: 150, height: 150)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Zelfstandigenaftrek voortgang: \(Int(truncating: (progress * 100) as NSDecimalNumber)) procent, \(current.asDecimal) van \(target.asDecimal) uren")
+                .accessibilityValue(progress >= 1 ? "Drempel behaald" : "Nog \(remaining.asDecimal) uur nodig")
 
                 if progress >= 1 {
                     Label("Drempel behaald!", systemImage: "checkmark.circle.fill")
@@ -230,6 +245,8 @@ struct DashboardView: View {
                     appState.selectedSidebarItem = .urenregistratie
                 }
                 .font(.caption)
+                .accessibilityLabel("Bekijk alle tijdregistraties")
+                .accessibilityHint("Navigeert naar de volledige lijst met tijdregistraties")
             }
 
             if recentEntries.isEmpty {
@@ -263,6 +280,8 @@ struct DashboardView: View {
                     appState.selectedSidebarItem = .facturen
                 }
                 .font(.caption)
+                .accessibilityLabel("Bekijk alle facturen")
+                .accessibilityHint("Navigeert naar de volledige factuurlijst")
             }
 
             if outstandingInvoices.isEmpty {
@@ -401,6 +420,23 @@ struct DashboardView: View {
     private var totalUninvoicedAmount: Decimal {
         clientsWithUninvoicedWork.reduce(0) { $0 + $1.amount }
     }
+
+    private var revenueChartAccessibilityDescription: String {
+        guard !monthlyRevenue.isEmpty else { return "Geen gegevens" }
+
+        let highestMonth = monthlyRevenue.max(by: { $0.revenue < $1.revenue })
+        let lowestMonth = monthlyRevenue.min(by: { $0.revenue < $1.revenue })
+        let totalRevenue = monthlyRevenue.reduce(0.0) { $0 + $1.revenue }
+
+        var description = "Totale omzet: \(Decimal(totalRevenue).asCurrency). "
+
+        if let highest = highestMonth, let lowest = lowestMonth {
+            description += "Hoogste maand: \(highest.monthName) met \(Decimal(highest.revenue).asCurrency). "
+            description += "Laagste maand: \(lowest.monthName) met \(Decimal(lowest.revenue).asCurrency)."
+        }
+
+        return description
+    }
 }
 
 // MARK: - Recent Activity Row
@@ -515,6 +551,8 @@ struct UninvoicedClientCard: View {
             .buttonStyle(.borderedProminent)
             .tint(.purple)
             .frame(maxWidth: .infinity)
+            .accessibilityLabel("Factureer \(client.bedrijfsnaam)")
+            .accessibilityHint("Maakt een nieuwe factuur aan voor deze klant met de openstaande registraties")
         }
         .padding(12)
         .background(Color.purple.opacity(0.1))

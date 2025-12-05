@@ -44,9 +44,9 @@ class DocumentStorageService {
         guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             // Fallback to user's home directory if Application Support unavailable
             return fileManager.homeDirectoryForCurrentUser
-                .appendingPathComponent("Documents/RoBergBoekhouding", isDirectory: true)
+                .appendingPathComponent("Documents/Uurwerker", isDirectory: true)
         }
-        return appSupport.appendingPathComponent("RoBergBoekhouding/Documents", isDirectory: true)
+        return appSupport.appendingPathComponent("Uurwerker/Documents", isDirectory: true)
     }
 
     // MARK: - Public Methods

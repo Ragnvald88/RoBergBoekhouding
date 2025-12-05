@@ -30,6 +30,9 @@ final class BusinessSettings {
     var btwVrijgesteld: Bool                // Legacy: Healthcare is BTW exempt
     var standaardBTWTariefRaw: String       // Default BTW tarief for new invoices
 
+    // MARK: - Onboarding
+    var hasCompletedOnboarding: Bool = false // Track if user has completed initial setup
+
     // MARK: - Branding
     var logoPath: String?                   // Path to company logo
     var primaryColorHex: String?            // Brand color for invoices
@@ -123,15 +126,15 @@ final class BusinessSettings {
     // MARK: - Initializer
     init(
         id: UUID = UUID(),
-        bedrijfsnaam: String = "RoBerg huisartswaarnemer",
-        eigenaar: String = "R. Hoogenberg",
-        adres: String = "Bastion 3",
-        postcodeplaats: String = "9723 ZH Groningen",
-        telefoon: String = "06 432 67 791",
-        email: String = "ronaldhoogenberg@hotmail.com",
-        kvkNummer: String = "90103777",
-        iban: String = "NL74 RABO 0344 1916 80",
-        bank: String = "Rabobank",
+        bedrijfsnaam: String = "",
+        eigenaar: String = "",
+        adres: String = "",
+        postcodeplaats: String = "",
+        telefoon: String = "",
+        email: String = "",
+        kvkNummer: String = "",
+        iban: String = "",
+        bank: String = "",
         standaardUurtariefDag: Decimal = 70.00,
         standaardUurtariefANW: Decimal = 124.00,
         standaardKilometertarief: Decimal = 0.23,
@@ -140,6 +143,7 @@ final class BusinessSettings {
         urendrempelZelfstandigenaftrek: Int = 1225,
         btwVrijgesteld: Bool = true,
         standaardBTWTarief: BTWTarief = .vrijgesteld,
+        hasCompletedOnboarding: Bool = false,
         logoPath: String? = nil,
         primaryColorHex: String? = nil,
         invoiceFooterText: String? = nil
@@ -163,6 +167,7 @@ final class BusinessSettings {
         self.urendrempelZelfstandigenaftrek = urendrempelZelfstandigenaftrek
         self.btwVrijgesteld = btwVrijgesteld
         self.standaardBTWTariefRaw = standaardBTWTarief.rawValue
+        self.hasCompletedOnboarding = hasCompletedOnboarding
         self.logoPath = logoPath
         self.primaryColorHex = primaryColorHex
         self.invoiceFooterText = invoiceFooterText
@@ -207,7 +212,7 @@ final class BusinessSettings {
 
 // MARK: - Default Settings
 extension BusinessSettings {
-    /// Default settings for RoBerg huisartswaarnemer
+    /// Default settings with empty values - user must configure on first launch
     static var defaultSettings: BusinessSettings {
         BusinessSettings()
     }

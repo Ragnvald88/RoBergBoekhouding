@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0F4F624BAFBB485990969792 /* UurwerkerComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72A6D0473F304472868BB841 /* UurwerkerComponents.swift */; };
+		76DAD6CE4CB4444B8EFFD65C /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2557FC64F4DA47EE9B12DB1E /* Typography.swift */; };
+		961D90D93B174EB2AEFA3F40 /* Colors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A910D4D751943F292420ACC /* Colors.swift */; };
+		EFE5324DB2D14A27BBF8174D /* Spacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = D96EED0213B44E16A536ED8B /* Spacing.swift */; };
+		243536C392EF466DBB22CE59 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B5817ABAB744B18B0B14F68 /* OnboardingView.swift */; };
+		4225D5D8A0A04D528DA48395 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD7582873A5E4C03AA09A1CB /* AboutView.swift */; };
 		APP001 /* RoBergBoekhoudingApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC001 /* RoBergBoekhoudingApp.swift */; };
 		APP002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC002 /* ContentView.swift */; };
 		APP003 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC003 /* AppState.swift */; };
@@ -44,6 +50,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		72A6D0473F304472868BB841 /* UurwerkerComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UurwerkerComponents.swift; sourceTree = "<group>"; };
+		2557FC64F4DA47EE9B12DB1E /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Typography.swift; sourceTree = "<group>"; };
+		6A910D4D751943F292420ACC /* Colors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Colors.swift; sourceTree = "<group>"; };
+		D96EED0213B44E16A536ED8B /* Spacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Spacing.swift; sourceTree = "<group>"; };
+		4B5817ABAB744B18B0B14F68 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		CD7582873A5E4C03AA09A1CB /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		ENT001 /* RoBergBoekhouding.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RoBergBoekhouding.entitlements; sourceTree = "<group>"; };
 		PROD001 /* RoBergBoekhouding.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RoBergBoekhouding.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		RES001F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -130,6 +142,7 @@
 				GRP_MODELS /* Models */,
 				GRP_SERVICES /* Services */,
 				GRP_UTILITIES /* Utilities */,
+				GRP_DESIGNSYS /* DesignSystem */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -162,6 +175,8 @@
 				GRP_EXPENSES /* Expenses */,
 				GRP_REPORTS /* Reports */,
 				GRP_SHARED /* Shared */,
+				GRP_ABOUT /* About */,
+				GRP_ONBOARDING /* Onboarding */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -229,6 +244,22 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		GRP_ABOUT /* About */ = {
+			isa = PBXGroup;
+			children = (
+				CD7582873A5E4C03AA09A1CB /* AboutView.swift */,
+			);
+			path = About;
+			sourceTree = "<group>";
+		};
+		GRP_ONBOARDING /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				4B5817ABAB744B18B0B14F68 /* OnboardingView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
 		GRP_TIMETRACK /* TimeTracking */ = {
 			isa = PBXGroup;
 			children = (
@@ -245,6 +276,25 @@
 				SRC010 /* DutchFormatters.swift */,
 			);
 			path = Utilities;
+			sourceTree = "<group>";
+		};
+		GRP_DESIGNSYS /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				D96EED0213B44E16A536ED8B /* Spacing.swift */,
+				6A910D4D751943F292420ACC /* Colors.swift */,
+				2557FC64F4DA47EE9B12DB1E /* Typography.swift */,
+				GRP_DS_COMPONENTS /* Components */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		GRP_DS_COMPONENTS /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				72A6D0473F304472868BB841 /* UurwerkerComponents.swift */,
+			);
+			path = Components;
 			sourceTree = "<group>";
 		};
 		PRODUCTS /* Products */ = {
@@ -365,6 +415,12 @@
 				SVC004 /* PDFInvoiceImportService.swift in Sources */,
 				SVC005 /* DocumentStorageService.swift in Sources */,
 				SHR001 /* PDFViewerView.swift in Sources */,
+				243536C392EF466DBB22CE59 /* OnboardingView.swift in Sources */,
+				EFE5324DB2D14A27BBF8174D /* Spacing.swift in Sources */,
+				961D90D93B174EB2AEFA3F40 /* Colors.swift in Sources */,
+				76DAD6CE4CB4444B8EFFD65C /* Typography.swift in Sources */,
+				0F4F624BAFBB485990969792 /* UurwerkerComponents.swift in Sources */,
+				4225D5D8A0A04D528DA48395 /* AboutView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -4,6 +4,9 @@ import SwiftData
 struct ContentView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.modelContext) private var modelContext
+    @Query private var settings: [BusinessSettings]
+
+    @State private var showOnboarding = false
 
     var body: some View {
         NavigationSplitView {
@@ -14,7 +17,7 @@ struct ContentView: View {
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1000, minHeight: 600)
         .onAppear {
-            ensureSettingsExist()
+            checkOnboardingStatus()
         }
         .alert(appState.alertTitle, isPresented: $appState.showingAlert) {
             Button("OK", role: .cancel) { }
@@ -30,10 +33,18 @@ struct ContentView: View {
             ImportView()
                 .environmentObject(appState)
         }
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView(isPresented: $showOnboarding)
+        }
     }
 
-    private func ensureSettingsExist() {
-        _ = BusinessSettings.ensureSettingsExist(in: modelContext)
+    private func checkOnboardingStatus() {
+        let businessSettings = BusinessSettings.ensureSettingsExist(in: modelContext)
+
+        // Show onboarding if not completed
+        if !businessSettings.hasCompletedOnboarding {
+            showOnboarding = true
+        }
     }
 }
 
@@ -85,7 +96,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationTitle("RoBerg")
+        .navigationTitle("Uurwerker")
         .toolbar {
             ToolbarItem {
                 Button(action: { appState.showImportSheet = true }) {

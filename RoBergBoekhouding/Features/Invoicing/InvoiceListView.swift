@@ -588,7 +588,7 @@ struct InvoiceDetailView: View {
                 Text(invoice.factuurnummer)
                     .font(.title.weight(.bold))
 
-                StatusBadge(status: invoice.status)
+                InvoiceStatusBadge(status: invoice.status)
             }
 
             Spacer()

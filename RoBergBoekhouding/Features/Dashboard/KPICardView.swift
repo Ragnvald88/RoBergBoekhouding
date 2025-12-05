@@ -38,6 +38,8 @@ struct KPICardView: View {
         .background(.background)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value). \(subtitle)")
     }
 }
 

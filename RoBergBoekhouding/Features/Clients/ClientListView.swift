@@ -46,42 +46,54 @@ struct ClientListView: View {
                 .background(.bar)
 
                 // List
-                List(selection: $selectedClient) {
-                    if !activeClients.isEmpty {
-                        Section("Actief") {
-                            ForEach(activeClients) { client in
-                                ClientRow(
-                                    client: client,
-                                    onNewClient: { appState.showNewClient = true },
-                                    onNewTimeEntry: { selectedClient in
-                                        appState.selectedSidebarItem = .urenregistratie
-                                        appState.showNewTimeEntry = true
-                                        // Note: TimeEntryFormView will need to support pre-selected client
-                                    }
-                                )
-                                .tag(client)
+                if activeClients.isEmpty && inactiveClients.isEmpty {
+                    EmptyStateView(
+                        icon: "person.3.fill",
+                        title: "Geen klanten",
+                        description: "Voeg je eerste klant toe om te beginnen met factureren.",
+                        actionTitle: "Nieuwe klant"
+                    ) {
+                        appState.showNewClient = true
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(selection: $selectedClient) {
+                        if !activeClients.isEmpty {
+                            Section("Actief") {
+                                ForEach(activeClients) { client in
+                                    ClientRow(
+                                        client: client,
+                                        onNewClient: { appState.showNewClient = true },
+                                        onNewTimeEntry: { selectedClient in
+                                            appState.selectedSidebarItem = .urenregistratie
+                                            appState.showNewTimeEntry = true
+                                            // Note: TimeEntryFormView will need to support pre-selected client
+                                        }
+                                    )
+                                    .tag(client)
+                                }
                             }
                         }
-                    }
 
-                    if !inactiveClients.isEmpty {
-                        Section("Inactief") {
-                            ForEach(inactiveClients) { client in
-                                ClientRow(
-                                    client: client,
-                                    onNewClient: { appState.showNewClient = true },
-                                    onNewTimeEntry: { _ in
-                                        appState.selectedSidebarItem = .urenregistratie
-                                        appState.showNewTimeEntry = true
-                                    }
-                                )
-                                .tag(client)
+                        if !inactiveClients.isEmpty {
+                            Section("Inactief") {
+                                ForEach(inactiveClients) { client in
+                                    ClientRow(
+                                        client: client,
+                                        onNewClient: { appState.showNewClient = true },
+                                        onNewTimeEntry: { _ in
+                                            appState.selectedSidebarItem = .urenregistratie
+                                            appState.showNewTimeEntry = true
+                                        }
+                                    )
+                                    .tag(client)
+                                }
                             }
                         }
                     }
+                    .listStyle(.sidebar)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .listStyle(.sidebar)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(minWidth: 250, idealWidth: 300, maxWidth: 400)
             .frame(maxHeight: .infinity)
@@ -459,7 +471,7 @@ struct ClientDetailView: View {
                     Spacer()
                     Text(invoice.totaalbedrag.asCurrency)
                         .font(.subheadline.monospacedDigit())
-                    StatusBadge(status: invoice.status)
+                    InvoiceStatusBadge(status: invoice.status)
                 }
             }
         }
@@ -478,8 +490,8 @@ struct ClientDetailView: View {
     }
 }
 
-// MARK: - Status Badge
-struct StatusBadge: View {
+// MARK: - Invoice Status Badge
+struct InvoiceStatusBadge: View {
     let status: InvoiceStatus
 
     var body: some View {

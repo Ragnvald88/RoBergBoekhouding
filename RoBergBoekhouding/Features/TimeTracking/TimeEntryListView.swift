@@ -38,11 +38,15 @@ struct TimeEntryListView: View {
 
             // Content
             if filteredEntries.isEmpty {
-                ContentUnavailableView(
-                    "Geen urenregistraties",
-                    systemImage: "clock",
-                    description: Text("Klik op 'Nieuwe Registratie' om te beginnen")
-                )
+                EmptyStateView(
+                    icon: "clock.fill",
+                    title: "Geen urenregistraties",
+                    description: "Begin met het registreren van je werkuren. Deze worden automatisch gekoppeld aan klanten.",
+                    actionTitle: "Eerste registratie"
+                ) {
+                    appState.selectedTimeEntry = nil
+                    appState.showNewTimeEntry = true
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Table(filteredEntries, selection: $selectedEntries) {

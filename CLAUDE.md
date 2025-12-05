@@ -1,4 +1,4 @@
-# RoBerg Boekhouding - Claude Code Guide
+# Uurwerker - Claude Code Guide
 
 ## Project Overview
 
@@ -17,9 +17,9 @@ Native macOS bookkeeping application for a self-employed GP (huisartswaarnemer) 
 ## Project Structure
 
 ```
-RoBergBoekhouding/
+Uurwerker/
 ├── App/                           # Application entry and state
-│   ├── RoBergBoekhoudingApp.swift # Main app, SwiftData container setup
+│   ├── UurwerkerApp.swift         # Main app, SwiftData container setup
 │   ├── AppState.swift             # Global @Published state
 │   └── ContentView.swift          # Root navigation (sidebar + detail)
 ├── Core/
@@ -180,7 +180,7 @@ if let url = invoice.pdfURL() {
 
 Default document storage location:
 ```
-~/Library/Application Support/RoBergBoekhouding/Documents/
+~/Library/Application Support/Uurwerker/Documents/
 ├── Invoices/{year}/{invoice_number}.pdf    # Generated invoices
 ├── Expenses/{year}/{expense_id}.pdf        # Receipt scans
 └── Imports/{year}/{invoice_number}.pdf     # Imported PDF invoices
@@ -228,13 +228,13 @@ let container = try ModelContainer(for: Client.self, TimeEntry.self, ..., config
 
 ```bash
 # Open in Xcode
-open RoBergBoekhouding.xcodeproj
+open Uurwerker.xcodeproj
 
 # Build from command line
-xcodebuild -project RoBergBoekhouding.xcodeproj -scheme RoBergBoekhouding build
+xcodebuild -project Uurwerker.xcodeproj -scheme Uurwerker build
 
 # Run
-xcodebuild -project RoBergBoekhouding.xcodeproj -scheme RoBergBoekhouding -destination 'platform=macOS' run
+xcodebuild -project Uurwerker.xcodeproj -scheme Uurwerker -destination 'platform=macOS' run
 ```
 
 ## Business Rules

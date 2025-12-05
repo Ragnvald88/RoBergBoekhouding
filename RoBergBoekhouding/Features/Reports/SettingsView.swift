@@ -29,6 +29,8 @@ struct SettingsView: View {
     @State private var hasChanges = false
     @State private var showingSaveAlert = false
     @State private var showingAboutView = false
+    @State private var isCreatingBackup = false
+    @State private var lastBackupDate: Date? = nil
 
     var body: some View {
         settingsForm
@@ -53,6 +55,7 @@ struct SettingsView: View {
             belastingSection
             dataSection
             documentopslagSection
+            backupSection
             overDeAppSection
         }
         .formStyle(.grouped)
@@ -238,6 +241,46 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Backup Section
+    private var backupSection: some View {
+        Section("Backup") {
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Database backup")
+                        .font(.headline)
+                    Text("Maak een JSON-backup van al je gegevens")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("Maak backup") {
+                    Task {
+                        await createBackup()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isCreatingBackup)
+            }
+
+            if let lastBackupDate = lastBackupDate {
+                HStack {
+                    Text("Laatste backup:")
+                    Spacer()
+                    Text(lastBackupDate, style: .date)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Button("Open backup map") {
+                Task {
+                    await BackupService.shared.openBackupFolder()
+                }
+            }
+        }
+    }
+
     private var overDeAppSection: some View {
         Section("Over de app") {
             Button {
@@ -324,97 +367,18 @@ struct SettingsView: View {
             try? DocumentStorageService.shared.ensureDirectoryStructure(customBasePath: url.path)
         }
     }
-}
 
-// MARK: - About View
+    private func createBackup() async {
+        isCreatingBackup = true
+        defer { isCreatingBackup = false }
 
-/// About view showing app information - Required for App Store
-struct AboutView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    // App version info
-    private var appVersion: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
-    }
-
-    private var buildNumber: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            VStack(spacing: 16) {
-                Image(systemName: "clock.badge.checkmark")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.blue)
-                    .accessibilityLabel("App icoon")
-
-                VStack(spacing: 4) {
-                    Text("RoBerg Boekhouding")
-                        .font(.title)
-                        .fontWeight(.bold)
-
-                    Text("Versie \(appVersion) (\(buildNumber))")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text("Boekhouding voor ZZP'ers")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 32)
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Features
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Functies")
-                            .font(.headline)
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("Urenregistratie", systemImage: "clock")
-                            Label("Facturatie met BTW", systemImage: "doc.text")
-                            Label("Klantenbeheer", systemImage: "person.2")
-                            Label("Uitgavenbeheer", systemImage: "creditcard")
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-
-                    Divider()
-
-                    // Privacy
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Privacy")
-                            .font(.headline)
-                        Text("Al je gegevens blijven lokaal op je Mac. Deze app verzamelt geen data en maakt geen verbinding met externe servers.")
-                            .foregroundStyle(.secondary)
-                            .font(.caption)
-                    }
-
-                    Divider()
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\u{00A9} 2025 RoBerg. Alle rechten voorbehouden.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(24)
-            }
-
-            Divider()
-
-            HStack {
-                Spacer()
-                Button("Sluiten") { dismiss() }
-                    .keyboardShortcut(.escape)
-            }
-            .padding()
+        do {
+            let url = try await BackupService.shared.createBackup(modelContext: modelContext)
+            lastBackupDate = Date()
+            appState.showAlert(title: "Backup gemaakt", message: "Backup opgeslagen in: \(url.lastPathComponent)")
+        } catch {
+            appState.showAlert(title: "Backup mislukt", message: error.localizedDescription)
         }
-        .frame(width: 400, height: 500)
     }
 }
 

@@ -1,8 +1,9 @@
 import SwiftUI
 import SwiftData
+import AppKit
 
 @main
-struct RoBergBoekhoudingApp: App {
+struct UurwerkerApp: App {
     // MARK: - SwiftData Container
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -22,12 +23,49 @@ struct RoBergBoekhoudingApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // Log error for debugging
+            print("⚠️ Primary ModelContainer failed: \(error)")
+
+            // Attempt in-memory fallback for recovery mode
+            let fallbackConfig = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: true,
+                allowsSave: true
+            )
+            do {
+                print("ℹ️ Using in-memory fallback database")
+                return try ModelContainer(for: schema, configurations: [fallbackConfig])
+            } catch {
+                // This should never fail, but if it does, we need a last resort
+                print("❌ Critical: Even fallback container failed: \(error)")
+                // Create minimal container - this is truly the last resort
+                return try! ModelContainer(for: schema, configurations: [fallbackConfig])
+            }
         }
     }()
 
     // MARK: - App State
     @StateObject private var appState = AppState()
+    @State private var showingAbout = false
+
+    // Track if we're using fallback in-memory database
+    private var isRecoveryMode: Bool {
+        sharedModelContainer.configurations.first?.isStoredInMemoryOnly ?? false
+    }
+
+    // MARK: - Helper Functions
+    private func showAboutWindow() {
+        let aboutWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 600),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        aboutWindow.title = "Over Uurwerker"
+        aboutWindow.center()
+        aboutWindow.contentView = NSHostingView(rootView: AboutView())
+        aboutWindow.makeKeyAndOrderFront(nil)
+    }
 
     // MARK: - Body
     var body: some Scene {
@@ -96,6 +134,13 @@ struct RoBergBoekhoudingApp: App {
                     appState.selectedSidebarItem = .rapportages
                 }
                 .keyboardShortcut("6", modifiers: .command)
+            }
+
+            // Help Menu
+            CommandGroup(replacing: .appInfo) {
+                Button("Over Uurwerker") {
+                    showAboutWindow()
+                }
             }
         }
 
