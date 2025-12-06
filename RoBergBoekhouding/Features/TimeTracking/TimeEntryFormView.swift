@@ -62,9 +62,18 @@ struct TimeEntryFormView: View {
                         ForEach(ActivityCode.allCases, id: \.rawValue) { activity in
                             Text(activity.displayName).tag(activity.rawValue)
                         }
+                        Divider()
+                        Text("Anders...").tag("CUSTOM")
                     }
                     .onChange(of: code) { _, newCode in
-                        applyActivityDefaults(newCode)
+                        if newCode != "CUSTOM" {
+                            applyActivityDefaults(newCode)
+                        }
+                    }
+
+                    if code == "CUSTOM" {
+                        TextField("Omschrijving activiteit", text: $activiteit)
+                            .textFieldStyle(.roundedBorder)
                     }
 
                     TextField("Locatie", text: $locatie)
@@ -72,19 +81,15 @@ struct TimeEntryFormView: View {
 
                 // Hours & Rates Section
                 Section("Uren en Tarieven") {
-                    HStack {
-                        Text("Uren")
-                        Spacer()
-                        TextField("Uren", value: $uren, format: .number)
+                    LabeledContent("Uren") {
+                        TextField("", value: $uren, format: .number)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
                             .multilineTextAlignment(.trailing)
                     }
 
-                    HStack {
-                        Text("Uurtarief")
-                        Spacer()
-                        TextField("Tarief", value: $uurtarief, format: .currency(code: "EUR"))
+                    LabeledContent("Uurtarief") {
+                        TextField("", value: $uurtarief, format: .currency(code: "EUR"))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 100)
                             .multilineTextAlignment(.trailing)
@@ -142,32 +147,30 @@ struct TimeEntryFormView: View {
 
                 // Kilometers Section
                 Section("Kilometers") {
-                    HStack {
-                        Text("Retourafstand")
-                        Spacer()
-                        TextField("km", value: $retourafstand, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-                            .multilineTextAlignment(.trailing)
-                        Text("km")
-                            .foregroundStyle(.secondary)
+                    LabeledContent("Retourafstand") {
+                        HStack(spacing: 4) {
+                            TextField("", value: $retourafstand, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 80)
+                                .multilineTextAlignment(.trailing)
+                            Text("km")
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
-                    HStack {
-                        Text("Extra visitekilometers")
-                        Spacer()
-                        TextField("km", value: $visiteKm, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-                            .multilineTextAlignment(.trailing)
-                        Text("km")
-                            .foregroundStyle(.secondary)
+                    LabeledContent("Extra visitekilometers") {
+                        HStack(spacing: 4) {
+                            TextField("", value: $visiteKm, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 80)
+                                .multilineTextAlignment(.trailing)
+                            Text("km")
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
-                    HStack {
-                        Text("Kilometertarief")
-                        Spacer()
-                        TextField("Tarief", value: $kmtarief, format: .currency(code: "EUR"))
+                    LabeledContent("Kilometertarief") {
+                        TextField("", value: $kmtarief, format: .currency(code: "EUR"))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 100)
                             .multilineTextAlignment(.trailing)
