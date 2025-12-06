@@ -228,23 +228,55 @@ private struct ContactStep: View {
                 subtitle: "Deze verschijnen op je facturen"
             )
 
-            Form {
-                Section {
-                    TextField("Adres", text: $formData.adres)
+            VStack(spacing: Spacing.md) {
+                // Adres
+                HStack {
+                    Text("Adres")
+                        .frame(width: 120, alignment: .leading)
+                        .foregroundStyle(.secondary)
+                    TextField("Straat en huisnummer", text: $formData.adres)
+                        .textFieldStyle(.roundedBorder)
+                }
 
-                    HStack {
-                        TextField("Postcode", text: $formData.postcode)
-                            .frame(width: 100)
-                        TextField("Plaats", text: $formData.plaats)
-                    }
+                // Postcode en Plaats
+                HStack {
+                    Text("Postcode")
+                        .frame(width: 120, alignment: .leading)
+                        .foregroundStyle(.secondary)
+                    TextField("1234 AB", text: $formData.postcode)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 100)
 
-                    TextField("E-mailadres", text: $formData.email)
+                    Text("Plaats")
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, Spacing.md)
+                    TextField("Plaatsnaam", text: $formData.plaats)
+                        .textFieldStyle(.roundedBorder)
+                }
 
-                    TextField("Telefoonnummer", text: $formData.telefoon)
+                // E-mailadres
+                HStack {
+                    Text("E-mailadres")
+                        .frame(width: 120, alignment: .leading)
+                        .foregroundStyle(.secondary)
+                    TextField("email@voorbeeld.nl", text: $formData.email)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                // Telefoonnummer
+                HStack {
+                    Text("Telefoonnummer")
+                        .frame(width: 120, alignment: .leading)
+                        .foregroundStyle(.secondary)
+                    TextField("+31 6 12345678", text: $formData.telefoon)
+                        .textFieldStyle(.roundedBorder)
                 }
             }
-            .formStyle(.grouped)
-            .scrollDisabled(true)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .background(Color.elevatedBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, Spacing.md)
 
             Spacer()
 
@@ -327,61 +359,75 @@ private struct RatesStep: View {
                 subtitle: "Je kunt dit later per klant aanpassen"
             )
 
-            Form {
-                Section {
-                    LabeledContent("Uurtarief") {
-                        HStack(spacing: 4) {
-                            Text("€")
-                                .foregroundStyle(.secondary)
-                            TextField("75", text: $uurtariefText)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 80)
-                                .multilineTextAlignment(.trailing)
-                                .onChange(of: uurtariefText) { _, newValue in
-                                    if let value = Decimal(string: newValue.replacingOccurrences(of: ",", with: ".")) {
-                                        formData.uurtarief = value
-                                    }
-                                }
+            VStack(spacing: Spacing.md) {
+                // Uurtarief
+                HStack {
+                    Text("Uurtarief")
+                        .frame(width: 160, alignment: .leading)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("€")
+                        .foregroundStyle(.secondary)
+                    TextField("75", text: $uurtariefText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 80)
+                        .multilineTextAlignment(.trailing)
+                        .onChange(of: uurtariefText) { _, newValue in
+                            if let value = Decimal(string: newValue.replacingOccurrences(of: ",", with: ".")) {
+                                formData.uurtarief = value
+                            }
                         }
-                    }
+                }
 
-                    LabeledContent("Kilometervergoeding") {
-                        HStack(spacing: 4) {
-                            Text("€")
-                                .foregroundStyle(.secondary)
-                            TextField("0,23", text: $kmTariefText)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 80)
-                                .multilineTextAlignment(.trailing)
-                                .onChange(of: kmTariefText) { _, newValue in
-                                    if let value = Decimal(string: newValue.replacingOccurrences(of: ",", with: ".")) {
-                                        formData.kmTarief = value
-                                    }
-                                }
+                // Kilometervergoeding
+                HStack {
+                    Text("Kilometervergoeding")
+                        .frame(width: 160, alignment: .leading)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("€")
+                        .foregroundStyle(.secondary)
+                    TextField("0,23", text: $kmTariefText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 80)
+                        .multilineTextAlignment(.trailing)
+                        .onChange(of: kmTariefText) { _, newValue in
+                            if let value = Decimal(string: newValue.replacingOccurrences(of: ",", with: ".")) {
+                                formData.kmTarief = value
+                            }
                         }
-                    }
+                }
 
-                    LabeledContent("Betalingstermijn") {
-                        HStack(spacing: 4) {
-                            TextField("14", text: $betalingstermijnText)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 80)
-                                .multilineTextAlignment(.trailing)
-                                .onChange(of: betalingstermijnText) { _, newValue in
-                                    if let value = Int(newValue) {
-                                        formData.betalingstermijn = max(7, min(60, value))
-                                    }
-                                }
-                            Text("dagen")
-                                .foregroundStyle(.secondary)
+                // Betalingstermijn
+                HStack {
+                    Text("Betalingstermijn")
+                        .frame(width: 160, alignment: .leading)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    TextField("14", text: $betalingstermijnText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 80)
+                        .multilineTextAlignment(.trailing)
+                        .onChange(of: betalingstermijnText) { _, newValue in
+                            if let value = Int(newValue) {
+                                formData.betalingstermijn = max(7, min(60, value))
+                            }
                         }
-                    }
-                } footer: {
-                    Text("De standaard kilometervergoeding is €0,23 per km (belastingvrij).")
+                    Text("dagen")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 50, alignment: .leading)
                 }
             }
-            .formStyle(.grouped)
-            .scrollDisabled(true)
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.md)
+            .background(Color.elevatedBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, Spacing.md)
+
+            Text("De standaard kilometervergoeding is €0,23 per km (belastingvrij).")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, Spacing.lg)
 
             Spacer()
 

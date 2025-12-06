@@ -1,5 +1,12 @@
 import Foundation
 import SwiftData
+import os.log
+
+/// Logger for BusinessSettings operations
+private let settingsLogger = Logger(subsystem: "nl.uurwerker", category: "BusinessSettings")
+
+/// Serial queue for thread-safe invoice number generation
+private let invoiceNumberQueue = DispatchQueue(label: "nl.uurwerker.invoiceNumber", qos: .userInitiated)
 
 @Model
 final class BusinessSettings {
@@ -225,19 +232,41 @@ final class BusinessSettings {
     }
 
     /// Generate next invoice number and increment counter
+    /// Thread-safe implementation using a serial queue to prevent race conditions
     func generateNextInvoiceNumber() -> String {
-        let year = Calendar.current.component(.year, from: Date())
+        return invoiceNumberQueue.sync {
+            let year = Calendar.current.component(.year, from: Date())
 
-        // Reset counter if year changed
+            // Reset counter if year changed
+            if !factuurnummerPrefix.hasPrefix("\(year)") {
+                settingsLogger.info("Invoice number counter reset for new year: \(year)")
+                factuurnummerPrefix = "\(year)-"
+                laatsteFactuurnummer = 0
+            }
+
+            laatsteFactuurnummer += 1
+            updateTimestamp()
+
+            let invoiceNumber = String(format: "%d-%03d", year, laatsteFactuurnummer)
+            settingsLogger.debug("Generated invoice number: \(invoiceNumber)")
+
+            return invoiceNumber
+        }
+    }
+
+    /// Peek at the next invoice number without incrementing the counter
+    /// Useful for previews and validation
+    func peekNextInvoiceNumber() -> String {
+        let year = Calendar.current.component(.year, from: Date())
+        let nextNumber: Int
+
         if !factuurnummerPrefix.hasPrefix("\(year)") {
-            factuurnummerPrefix = "\(year)-"
-            laatsteFactuurnummer = 0
+            nextNumber = 1
+        } else {
+            nextNumber = laatsteFactuurnummer + 1
         }
 
-        laatsteFactuurnummer += 1
-        updateTimestamp()
-
-        return String(format: "%d-%03d", year, laatsteFactuurnummer)
+        return String(format: "%d-%03d", year, nextNumber)
     }
 
     /// Update prefix for new year
@@ -271,19 +300,26 @@ extension BusinessSettings {
                 // Keep the first (oldest) settings record, delete any duplicates
                 let settingsToKeep = existing[0]
                 if existing.count > 1 {
+                    settingsLogger.warning("Found \(existing.count) settings records, removing duplicates")
                     for duplicateSettings in existing.dropFirst() {
                         context.delete(duplicateSettings)
                     }
-                    try? context.save()
+                    do {
+                        try context.save()
+                        settingsLogger.info("Successfully removed duplicate settings records")
+                    } catch {
+                        settingsLogger.error("Failed to save after removing duplicate settings: \(error.localizedDescription)")
+                    }
                 }
                 settingsToKeep.updateYearPrefix()
                 return settingsToKeep
             }
         } catch {
-            print("Error fetching settings: \(error)")
+            settingsLogger.error("Error fetching settings: \(error.localizedDescription)")
         }
 
         // Create default settings
+        settingsLogger.info("Creating default business settings")
         let newSettings = BusinessSettings.defaultSettings
         context.insert(newSettings)
         return newSettings

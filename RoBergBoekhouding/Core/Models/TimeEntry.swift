@@ -158,12 +158,34 @@ final class TimeEntry {
         return postcodeplaats
     }
 
-    /// Mark this entry as invoiced
-    func markAsInvoiced(withNumber number: String, invoice: Invoice) {
+    /// Mark this entry as invoiced (internal - sets flags only)
+    /// Note: Use Invoice.addTimeEntries() to link entries to invoices.
+    /// This method is called internally by addTimeEntries() and should not
+    /// be called directly to avoid relationship management issues.
+    internal func markAsInvoiced(withNumber number: String) {
         isInvoiced = true
         factuurnummer = number
-        self.invoice = invoice
         updateTimestamp()
+    }
+
+    /// Unmark this entry as invoiced (for when invoice is deleted)
+    func unmarkAsInvoiced() {
+        isInvoiced = false
+        factuurnummer = nil
+        invoice = nil
+        updateTimestamp()
+    }
+
+    /// Check if this entry's invoiced state is consistent
+    /// Returns true if all invoice-related fields are in a valid state
+    var hasConsistentInvoiceState: Bool {
+        if isInvoiced {
+            // If marked as invoiced, should have both factuurnummer and invoice reference
+            return factuurnummer != nil && invoice != nil
+        } else {
+            // If not invoiced, should have neither
+            return factuurnummer == nil && invoice == nil
+        }
     }
 }
 

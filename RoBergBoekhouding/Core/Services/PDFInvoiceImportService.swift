@@ -1,6 +1,10 @@
 import Foundation
 import SwiftData
 import PDFKit
+import os.log
+
+/// Logger for PDF import operations
+private let importLogger = Logger(subsystem: "nl.uurwerker", category: "PDFImport")
 
 /// Service for importing invoices from PDF files
 @MainActor
@@ -83,7 +87,7 @@ class PDFInvoiceImportService {
                 invoice.importedPdfPath = storedPath
             } catch {
                 // Continue even if storage fails - the import itself succeeded
-                print("Warning: Could not store imported PDF: \(error.localizedDescription)")
+                importLogger.warning("Could not store imported PDF: \(error.localizedDescription)")
             }
         }
 
@@ -576,10 +580,24 @@ class PDFInvoiceImportService {
                     continue
                 }
             } else {
-                // Standard formats: "Datum" + "Omschrijving/Tarief/Bedrag"
-                if line.contains("Datum") && (line.contains("Omschrijving") || line.contains("Tarief") || line.contains("Bedrag")) {
+                // Standard formats: Various header patterns
+                let lowered = line.lowercased()
+                if (line.contains("Datum") && (line.contains("Omschrijving") || line.contains("Tarief") || line.contains("Bedrag"))) ||
+                   (lowered.contains("datum") && lowered.contains("uren")) ||
+                   (lowered.contains("datum") && lowered.contains("bedrag")) ||
+                   (line.contains("Omschrijving") && line.contains("Aantal")) ||
+                   (line.contains("OMSCHRIJVING") && (line.contains("TARIEF") || line.contains("BEDRAG"))) {
                     inTable = true
                     continue
+                }
+
+                // Also start table if we see a data line directly (no header)
+                // Look for date at start of line followed by work description
+                if !inTable {
+                    if let _ = extractPattern(from: line, pattern: "^\\s*[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}.*(?:Waarneming|dagpraktijk).*€") {
+                        inTable = true
+                        // Don't continue - process this line
+                    }
                 }
             }
 
@@ -650,6 +668,170 @@ class PDFInvoiceImportService {
             }
         }
 
+        // FALLBACK: If no items found, try generic parsing
+        if items.isEmpty {
+            importLogger.info("No items found with format \(String(describing: format)), trying fallback parser")
+            items = parseLineItemsFallback(from: lines)
+        }
+
+        return items
+    }
+
+    // MARK: - Fallback Parser (Generic)
+
+    /// Generic fallback parser that works with various formats
+    /// Looks for any line containing hours and rates
+    private func parseLineItemsFallback(from lines: [String]) -> [ParsedLineItem] {
+        var items: [ParsedLineItem] = []
+        var foundAnyData = false
+
+        for (index, line) in lines.enumerated() {
+            // Skip header lines and short lines
+            guard line.count > 10 else { continue }
+
+            // Look for lines that contain:
+            // 1. A date pattern (DD-MM-YYYY or DD/MM/YYYY)
+            // 2. "Waarneming" or "dagpraktijk" or "uren"
+            // 3. A currency amount (€)
+
+            let hasDate = extractPattern(from: line, pattern: "([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4})") != nil
+            let hasHoursKeyword = isHoursKeywordPresent(in: line)
+            let hasKmKeyword = isKmKeywordPresent(in: line)
+            let hasCurrency = line.contains("€")
+
+            // Try to parse if we have at least date + currency, or hours/km keyword + currency
+            if (hasDate && hasCurrency) || (hasHoursKeyword && hasCurrency) || (hasKmKeyword && hasCurrency) {
+                if let item = parseGenericLine(line: line, lines: lines, index: index) {
+                    items.append(item)
+                    foundAnyData = true
+                }
+            }
+        }
+
+        // If still nothing, try to find totals and work backwards
+        if !foundAnyData {
+            items = extractFromTotals(lines: lines)
+        }
+
+        return items
+    }
+
+    /// Check if a line contains keywords indicating hours/work
+    private func isHoursKeywordPresent(in line: String) -> Bool {
+        let lowered = line.lowercased()
+        return lowered.contains("waarneming") ||
+               lowered.contains("dagpraktijk") ||
+               lowered.contains("vakantiewaarneming") ||
+               lowered.contains("hoed") ||  // Huisartsen Onder Een Dak
+               lowered.contains("consult") ||
+               lowered.contains("vergoeding") ||
+               lowered.contains("nachtdienst") ||
+               lowered.contains("avonddienst") ||
+               lowered.contains("weekenddienst") ||
+               lowered.contains("dienst") && lowered.contains("€") ||
+               (lowered.contains("uren") && !lowered.contains("totaal"))
+    }
+
+    /// Check if a line contains keywords indicating km/travel
+    private func isKmKeywordPresent(in line: String) -> Bool {
+        let lowered = line.lowercased()
+        return lowered.contains("reiskosten") ||
+               lowered.contains("kilometer") ||
+               lowered.contains("km") && lowered.contains("€") ||
+               lowered.contains("retour")
+    }
+
+    /// Parse a generic line that might contain hours data
+    private func parseGenericLine(line: String, lines: [String], index: Int) -> ParsedLineItem? {
+        // Extract date
+        var itemDate = Date()
+        if let dateMatch = extractPattern(from: line, pattern: "([0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4})") {
+            if let date = parseDate(dateMatch) {
+                itemDate = date
+            }
+        }
+
+        // Check if this is an hours line or km line
+        let isHoursLine = isHoursKeywordPresent(in: line)
+        let isKmLine = isKmKeywordPresent(in: line)
+
+        guard isHoursLine || isKmLine else { return nil }
+
+        // Extract currency values
+        let currencyValues = extractCurrencyValues(from: line)
+
+        // Extract quantity - look for numbers that could be hours (0-24) or km (0-500)
+        let allNumbers = extractAllNumbers(from: line)
+
+        var quantity: Decimal = 0
+        var rate: Decimal = 0
+        var total: Decimal = 0
+
+        if isHoursLine {
+            // Hours are typically 0-24
+            quantity = allNumbers.first { $0 > 0 && $0 <= 24 } ?? 0
+
+            // Rate is typically 50-150 for hours
+            rate = currencyValues.first { $0 >= 50 && $0 <= 150 } ?? 77.50
+
+            // Total is usually the largest currency value
+            total = currencyValues.max() ?? (quantity * rate)
+        } else {
+            // KM can be 0-500
+            quantity = allNumbers.first { $0 > 20 && $0 <= 500 } ?? 0
+
+            // KM rate is typically 0.20-0.30
+            rate = currencyValues.first { $0 > 0 && $0 < 1 } ?? 0.23
+
+            // Total for km
+            total = currencyValues.first { $0 > 1 && $0 < 200 } ?? (quantity * rate)
+        }
+
+        guard quantity > 0 else { return nil }
+
+        return ParsedLineItem(
+            date: itemDate,
+            description: isHoursLine ? "Waarneming dagpraktijk" : "Reiskosten",
+            quantity: quantity,
+            rate: rate,
+            total: total,
+            isHoursEntry: isHoursLine
+        )
+    }
+
+    /// Extract data from total lines when individual lines can't be parsed
+    private func extractFromTotals(lines: [String]) -> [ParsedLineItem] {
+        var items: [ParsedLineItem] = []
+
+        // Look for "Totaal uren" or similar patterns
+        for line in lines {
+            let lowered = line.lowercased()
+
+            // Pattern: "Totaal uren: 9" or "9 uren" + amount
+            if (lowered.contains("totaal") && lowered.contains("uren")) ||
+               (lowered.contains("uren") && line.contains("€")) {
+
+                let numbers = extractAllNumbers(from: line)
+                let currencyValues = extractCurrencyValues(from: line)
+
+                // Find hours (typically small number)
+                if let hours = numbers.first(where: { $0 > 0 && $0 <= 100 }),
+                   let total = currencyValues.max() {
+
+                    let rate = hours > 0 ? total / hours : 77.50
+
+                    items.append(ParsedLineItem(
+                        date: Date(), // Use current date as fallback
+                        description: "Waarneming (totaal)",
+                        quantity: hours,
+                        rate: rate,
+                        total: total,
+                        isHoursEntry: true
+                    ))
+                }
+            }
+        }
+
         return items
     }
 
@@ -661,8 +843,8 @@ class PDFInvoiceImportService {
         guard let quantityMatch = extractPattern(from: line, pattern: "^([0-9]+)x?\\s") else { return nil }
         guard let quantity = Decimal(string: quantityMatch) else { return nil }
 
-        let isHours = line.contains("Waarneming") || line.contains("Dagpraktijk") || line.contains("dagpraktijk")
-        let isKm = line.contains("Reiskosten") || line.contains("Kilometer")
+        let isHours = isHoursKeywordPresent(in: line)
+        let isKm = isKmKeywordPresent(in: line)
 
         guard isHours || isKm else { return nil }
 
@@ -712,8 +894,8 @@ class PDFInvoiceImportService {
             }
         }
 
-        // Must contain Waarneming for hours line
-        guard line.contains("Waarneming") || line.contains("dagpraktijk") else { return nil }
+        // Must contain hours keyword
+        guard isHoursKeywordPresent(in: line) else { return nil }
 
         // Extract all currency values (€ prefixed numbers)
         let currencyValues = extractCurrencyValues(from: line)
@@ -764,7 +946,7 @@ class PDFInvoiceImportService {
             }
         }
 
-        guard line.contains("Waarneming") || line.contains("dagpraktijk") else { return nil }
+        guard isHoursKeywordPresent(in: line) else { return nil }
 
         let currencyValues = extractCurrencyValues(from: line)
 
@@ -813,7 +995,7 @@ class PDFInvoiceImportService {
             }
         }
 
-        guard line.contains("Waarneming") || line.contains("dagpraktijk") else { return nil }
+        guard isHoursKeywordPresent(in: line) else { return nil }
 
         let currencyValues = extractCurrencyValues(from: line)
 
@@ -864,8 +1046,8 @@ class PDFInvoiceImportService {
         }
 
         // Determine line type
-        let isHoursLine = line.contains("Waarneming") || line.contains("dagpraktijk")
-        let isKmLine = line.contains("Reiskosten") || line.contains("Kilometer") || line.contains("km retour")
+        let isHoursLine = isHoursKeywordPresent(in: line)
+        let isKmLine = isKmKeywordPresent(in: line)
 
         if isHoursLine {
             // Parse hours line
@@ -959,9 +1141,8 @@ class PDFInvoiceImportService {
         }
 
         // Determine line type
-        let isHoursLine = line.contains("Waarneming") || line.contains("dagpraktijk uren") ||
-                          (line.contains("HOED") && !line.contains("Reiskosten"))
-        let isKmLine = line.contains("Kilometer") || line.contains("Reiskosten") || line.contains("km")
+        let isHoursLine = isHoursKeywordPresent(in: line) && !isKmKeywordPresent(in: line)
+        let isKmLine = isKmKeywordPresent(in: line)
 
         if isHoursLine {
             let currencyValues = extractCurrencyValues(from: line)

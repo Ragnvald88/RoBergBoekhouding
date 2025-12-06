@@ -3,12 +3,41 @@ import AppKit
 import PDFKit
 import SwiftData
 import WebKit
+import os.log
+
+/// Logger for PDF generation
+private let pdfLogger = Logger(subsystem: "nl.uurwerker", category: "PDFGeneration")
+
+/// Default timeout for PDF generation in seconds
+private let pdfGenerationTimeout: TimeInterval = 30.0
 
 // MARK: - PDF Generation Service
 
 /// Service for generating PDF invoices
 class PDFGenerationService {
     private let settings: BusinessSettings
+
+    /// Container to hold WebView and delegate during async PDF generation
+    /// This prevents premature deallocation
+    private class PDFRenderContext {
+        let webView: WKWebView
+        let delegate: PDFWebViewDelegate
+        var timeoutWorkItem: DispatchWorkItem?
+
+        init(webView: WKWebView, delegate: PDFWebViewDelegate) {
+            self.webView = webView
+            self.delegate = delegate
+        }
+
+        func cancelTimeout() {
+            timeoutWorkItem?.cancel()
+            timeoutWorkItem = nil
+        }
+    }
+
+    /// Active render contexts - keeps references alive during rendering
+    private static var activeContexts: [UUID: PDFRenderContext] = [:]
+    private static let contextLock = NSLock()
 
     init(settings: BusinessSettings) {
         self.settings = settings
@@ -23,15 +52,44 @@ class PDFGenerationService {
     }
 
     /// Render HTML to PDF asynchronously using WKWebView
+    /// Includes proper memory management and timeout handling
     private func renderHTMLToPDFAsync(_ html: String) async -> Data? {
-        await withCheckedContinuation { continuation in
+        let contextId = UUID()
+        pdfLogger.debug("Starting PDF render with context: \(contextId.uuidString)")
+
+        return await withCheckedContinuation { continuation in
             DispatchQueue.main.async {
+                var hasResumed = false
+                let resumeLock = NSLock()
+
+                // Thread-safe resume helper
+                func safeResume(with data: Data?) {
+                    resumeLock.lock()
+                    defer { resumeLock.unlock() }
+
+                    guard !hasResumed else {
+                        pdfLogger.warning("Attempted to resume continuation twice for context: \(contextId.uuidString)")
+                        return
+                    }
+                    hasResumed = true
+
+                    // Clean up context
+                    Self.contextLock.lock()
+                    if let context = Self.activeContexts.removeValue(forKey: contextId) {
+                        context.cancelTimeout()
+                    }
+                    Self.contextLock.unlock()
+
+                    continuation.resume(returning: data)
+                }
+
                 let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 595, height: 842)) // A4 at 72 DPI
 
                 // Use navigation delegate to wait for content to fully load
                 let delegate = PDFWebViewDelegate { [weak webView] in
                     guard let webView = webView else {
-                        continuation.resume(returning: nil)
+                        pdfLogger.error("WebView was deallocated during PDF generation")
+                        safeResume(with: nil)
                         return
                     }
 
@@ -41,17 +99,32 @@ class PDFGenerationService {
                     webView.createPDF(configuration: config) { result in
                         switch result {
                         case .success(let data):
-                            continuation.resume(returning: data)
+                            pdfLogger.debug("PDF generated successfully: \(data.count) bytes")
+                            safeResume(with: data)
                         case .failure(let error):
-                            print("PDF generation error: \(error)")
-                            continuation.resume(returning: nil)
+                            pdfLogger.error("PDF generation error: \(error.localizedDescription)")
+                            safeResume(with: nil)
                         }
                     }
                 }
 
                 webView.navigationDelegate = delegate
-                // Store delegate to keep it alive during async operation
-                objc_setAssociatedObject(webView, "pdfDelegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+
+                // Store context to keep webView and delegate alive
+                let context = PDFRenderContext(webView: webView, delegate: delegate)
+
+                // Set up timeout
+                let timeoutWorkItem = DispatchWorkItem {
+                    pdfLogger.warning("PDF generation timed out after \(pdfGenerationTimeout) seconds")
+                    safeResume(with: nil)
+                }
+                context.timeoutWorkItem = timeoutWorkItem
+                DispatchQueue.main.asyncAfter(deadline: .now() + pdfGenerationTimeout, execute: timeoutWorkItem)
+
+                // Store context
+                Self.contextLock.lock()
+                Self.activeContexts[contextId] = context
+                Self.contextLock.unlock()
 
                 webView.loadHTMLString(html, baseURL: nil)
             }
@@ -473,32 +546,38 @@ enum PDFError: LocalizedError {
 private class PDFWebViewDelegate: NSObject, WKNavigationDelegate {
     private let onLoadComplete: () -> Void
     private var hasCompleted = false
+    private let completionLock = NSLock()
 
     init(onLoadComplete: @escaping () -> Void) {
         self.onLoadComplete = onLoadComplete
         super.init()
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    private func completeOnce() {
+        completionLock.lock()
+        defer { completionLock.unlock() }
+
         guard !hasCompleted else { return }
         hasCompleted = true
+
         // Small delay to ensure rendering is complete
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.onLoadComplete()
         }
     }
 
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        pdfLogger.debug("WebView finished loading content")
+        completeOnce()
+    }
+
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        guard !hasCompleted else { return }
-        hasCompleted = true
-        print("WebView navigation failed: \(error)")
-        onLoadComplete()
+        pdfLogger.error("WebView navigation failed: \(error.localizedDescription)")
+        completeOnce()
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        guard !hasCompleted else { return }
-        hasCompleted = true
-        print("WebView provisional navigation failed: \(error)")
-        onLoadComplete()
+        pdfLogger.error("WebView provisional navigation failed: \(error.localizedDescription)")
+        completeOnce()
     }
 }

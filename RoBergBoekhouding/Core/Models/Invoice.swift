@@ -1,5 +1,9 @@
 import Foundation
 import SwiftData
+import os.log
+
+/// Logger for Invoice operations
+private let invoiceLogger = Logger(subsystem: "nl.uurwerker", category: "Invoice")
 
 @Model
 final class Invoice {
@@ -41,13 +45,57 @@ final class Invoice {
     }
 
     /// Manual line items decoded from JSON
+    /// Note: This property logs errors on decode/encode failures but doesn't throw
+    /// to maintain compatibility with SwiftUI bindings
     var manualLineItems: [ManualInvoiceLineItem] {
         get {
             guard let data = manualLineItemsData else { return [] }
-            return (try? JSONDecoder().decode([ManualInvoiceLineItem].self, from: data)) ?? []
+            do {
+                return try JSONDecoder().decode([ManualInvoiceLineItem].self, from: data)
+            } catch {
+                invoiceLogger.error("Failed to decode manual line items for invoice \(self.factuurnummer): \(error.localizedDescription)")
+                // Log the raw data for debugging
+                if let rawString = String(data: data, encoding: .utf8) {
+                    invoiceLogger.debug("Raw JSON data: \(rawString)")
+                }
+                return []
+            }
         }
         set {
-            manualLineItemsData = try? JSONEncoder().encode(newValue)
+            do {
+                manualLineItemsData = try JSONEncoder().encode(newValue)
+                invoiceLogger.debug("Encoded \(newValue.count) manual line items for invoice \(self.factuurnummer)")
+            } catch {
+                invoiceLogger.error("Failed to encode manual line items for invoice \(self.factuurnummer): \(error.localizedDescription)")
+                // Don't lose existing data on encode failure
+                invoiceLogger.warning("Keeping existing manual line items data due to encode failure")
+            }
+        }
+    }
+
+    /// Safely get manual line items with explicit error handling
+    /// - Returns: Result containing items or encoding error
+    func getManualLineItemsSafe() -> Result<[ManualInvoiceLineItem], Error> {
+        guard let data = manualLineItemsData else { return .success([]) }
+        do {
+            let items = try JSONDecoder().decode([ManualInvoiceLineItem].self, from: data)
+            return .success(items)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    /// Safely set manual line items with explicit error handling
+    /// - Parameter items: The items to encode
+    /// - Returns: true if successful, false otherwise
+    @discardableResult
+    func setManualLineItemsSafe(_ items: [ManualInvoiceLineItem]) -> Bool {
+        do {
+            manualLineItemsData = try JSONEncoder().encode(items)
+            return true
+        } catch {
+            invoiceLogger.error("Failed to encode manual line items: \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -253,14 +301,26 @@ final class Invoice {
     }
 
     /// Add time entries to this invoice
+    /// This is the canonical way to link time entries to an invoice.
+    /// It properly manages both the relationship and the invoice flags.
     func addTimeEntries(_ entries: [TimeEntry]) {
         for entry in entries {
-            entry.markAsInvoiced(withNumber: factuurnummer, invoice: self)
+            // Set the flags (invoice number, isInvoiced)
+            entry.markAsInvoiced(withNumber: factuurnummer)
+            // Set the relationship - SwiftData will handle the inverse
+            entry.invoice = self
         }
-        if timeEntries == nil {
-            timeEntries = entries
-        } else {
-            timeEntries?.append(contentsOf: entries)
+        // Note: We don't need to manually add to timeEntries because
+        // SwiftData's inverse relationship handles this automatically
+        // when we set entry.invoice = self
+        updateTimestamp()
+    }
+
+    /// Remove time entries from this invoice
+    /// This properly unlinks entries and resets their invoice state.
+    func removeTimeEntries(_ entries: [TimeEntry]) {
+        for entry in entries {
+            entry.unmarkAsInvoiced()
         }
         updateTimestamp()
     }

@@ -24,6 +24,8 @@ struct ExpenseFormView: View {
     @State private var pendingReceiptURL: URL? // For new expenses - receipt to attach after save
     @State private var showingDeleteAlert: Bool = false
     @State private var showingAssetForm: Bool = false
+    @State private var isProcessingOCR: Bool = false
+    @State private var ocrMessage: String?
 
     private var isEditing: Bool { expense != nil }
     private var canSave: Bool { !omschrijving.isEmpty && bedrag > 0 }
@@ -203,6 +205,25 @@ struct ExpenseFormView: View {
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
+
+                    // OCR status
+                    if isProcessingOCR {
+                        HStack {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                            Text("Gegevens herkennen...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if let message = ocrMessage {
+                        HStack {
+                            Image(systemName: "checkmark.circle")
+                                .foregroundStyle(.green)
+                            Text(message)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
             .formStyle(.grouped)
@@ -362,6 +383,7 @@ struct ExpenseFormView: View {
 
     private func selectReceipt() {
         receiptError = nil
+        ocrMessage = nil
 
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.pdf, .png, .jpeg]
@@ -382,6 +404,61 @@ struct ExpenseFormView: View {
             } else {
                 // New expense - store URL for later attachment
                 pendingReceiptURL = url
+            }
+
+            // Run OCR to extract data
+            Task {
+                await extractDataFromReceipt(url: url)
+            }
+        }
+    }
+
+    /// Extract data from receipt using OCR and fill empty fields
+    private func extractDataFromReceipt(url: URL) async {
+        isProcessingOCR = true
+        ocrMessage = nil
+
+        do {
+            let extractedData = try await OCRService.shared.extractData(from: url)
+
+            await MainActor.run {
+                var fieldsUpdated: [String] = []
+
+                // Only fill in empty fields - respect user input
+                if bedrag == 0, let extractedAmount = extractedData.bedrag {
+                    bedrag = extractedAmount
+                    fieldsUpdated.append("bedrag")
+                }
+
+                if datum == Calendar.current.startOfDay(for: Date()), let extractedDate = extractedData.datum {
+                    datum = extractedDate
+                    fieldsUpdated.append("datum")
+                }
+
+                if leverancier.isEmpty, let extractedSupplier = extractedData.leverancier {
+                    leverancier = extractedSupplier
+                    fieldsUpdated.append("leverancier")
+                }
+
+                if factuurNummer.isEmpty, let extractedInvoice = extractedData.factuurNummer {
+                    factuurNummer = extractedInvoice
+                    fieldsUpdated.append("factuurnummer")
+                }
+
+                // Show feedback
+                if !fieldsUpdated.isEmpty {
+                    let confidence = Int(extractedData.confidence * 100)
+                    ocrMessage = "Ingevuld: \(fieldsUpdated.joined(separator: ", ")) (\(confidence)% zekerheid)"
+                } else if extractedData.hasData {
+                    ocrMessage = "Geen nieuwe gegevens gevonden"
+                }
+
+                isProcessingOCR = false
+            }
+        } catch {
+            await MainActor.run {
+                ocrMessage = nil
+                isProcessingOCR = false
             }
         }
     }

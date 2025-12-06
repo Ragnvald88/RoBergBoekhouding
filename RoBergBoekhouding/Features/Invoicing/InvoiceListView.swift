@@ -14,6 +14,7 @@ struct InvoiceListView: View {
     @State private var showDeleteAlert = false
     @State private var invoiceForPDFPreview: Invoice?
     @State private var showPDFPreview = false
+    @State private var saveError: AppError?
 
     private var filteredInvoices: [Invoice] {
         var invoices = allInvoices.filterByYear(appState.selectedYear)
@@ -148,6 +149,7 @@ struct InvoiceListView: View {
                 InvoicePreviewView(invoice: invoice)
             }
         }
+        .errorAlert($saveError)
     }
 
     // MARK: - Delete Alert Text
@@ -247,7 +249,13 @@ struct InvoiceListView: View {
         for invoice in selectedInvoices {
             invoice.updateStatus(status)
         }
-        try? modelContext.save()
+        do {
+            try modelContext.safeSave(entity: "Facturen")
+        } catch let error as AppError {
+            saveError = error
+        } catch {
+            saveError = .saveFailed(entity: "Facturen", reason: error.localizedDescription)
+        }
     }
 
     private func statusColor(_ status: InvoiceStatus) -> Color {
@@ -266,13 +274,9 @@ struct InvoiceListView: View {
             // Delete associated PDFs
             invoice.deleteAllPdfs()
 
-            // Unlink time entries
+            // Unlink time entries using the proper method
             if let entries = invoice.timeEntries {
-                for entry in entries {
-                    entry.isInvoiced = false
-                    entry.factuurnummer = nil
-                    entry.invoice = nil
-                }
+                invoice.removeTimeEntries(entries)
             }
 
             // Remove from selection
@@ -282,7 +286,13 @@ struct InvoiceListView: View {
             modelContext.delete(invoice)
         }
 
-        try? modelContext.save()
+        do {
+            try modelContext.safeSave(entity: "Facturen")
+        } catch let error as AppError {
+            saveError = error
+        } catch {
+            saveError = .deleteFailed(entity: "Facturen", reason: error.localizedDescription)
+        }
         invoicesToDelete = []
     }
 
@@ -441,7 +451,7 @@ struct InvoiceRow: View {
                 ForEach(invoice.status.otherStatuses, id: \.self) { status in
                     Button {
                         invoice.updateStatus(status)
-                        try? modelContext.save()
+                        modelContext.trySave(entity: "Factuutstatus")
                     } label: {
                         Label(status.displayName, systemImage: statusIcon(status))
                     }

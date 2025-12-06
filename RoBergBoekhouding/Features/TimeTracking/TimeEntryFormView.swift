@@ -27,6 +27,7 @@ struct TimeEntryFormView: View {
     @State private var verdeelfactor: Double = 1.0
     @State private var opmerkingen: String = ""
     @State private var showingDeleteAlert: Bool = false
+    @State private var saveError: AppError?
 
     private var isEditing: Bool { entry != nil }
 
@@ -203,6 +204,7 @@ struct TimeEntryFormView: View {
                 applyDefaults()
             }
         }
+        .errorAlert($saveError)
     }
 
     // MARK: - Header
@@ -429,15 +431,26 @@ struct TimeEntryFormView: View {
             modelContext.insert(newEntry)
         }
 
-        try? modelContext.save()
-        dismiss()
+        do {
+            try modelContext.safeSave(entity: "Urenregistratie")
+            dismiss()
+        } catch let error as AppError {
+            saveError = error
+        } catch {
+            saveError = .saveFailed(entity: "Urenregistratie", reason: error.localizedDescription)
+        }
     }
 
     private func deleteEntry() {
         guard let entry else { return }
-        modelContext.delete(entry)
-        try? modelContext.save()
-        dismiss()
+        do {
+            try modelContext.safeDelete(entry)
+            dismiss()
+        } catch let error as AppError {
+            saveError = error
+        } catch {
+            saveError = .deleteFailed(entity: "Urenregistratie", reason: error.localizedDescription)
+        }
     }
 }
 

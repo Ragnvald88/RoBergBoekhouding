@@ -26,6 +26,13 @@ struct SettingsView: View {
     @State private var standaardBetalingstermijn: Int = 14
     @State private var standaardBTWTarief: BTWTarief = .vrijgesteld
 
+    // Depreciation settings
+    @State private var afschrijvingDrempel: Decimal = 450
+    @State private var afschrijvingMinJaren: Int = 5
+    @State private var afschrijvingMaxPercentage: Decimal = 20
+    @State private var afschrijvingRestwaarde: Decimal = 10
+    @State private var afschrijvingFiscaalJaar: Int = Calendar.current.component(.year, from: Date())
+
     @State private var hasChanges = false
     @State private var showingSaveAlert = false
     @State private var showingAboutView = false
@@ -53,49 +60,70 @@ struct SettingsView: View {
             }
     }
 
+    @ViewBuilder
     private var settingsForm: some View {
         Form {
-            bedrijfsgegevensSection
-            contactSection
-            registratieSection
-            tarievenSection
-            factuurnummeringSection
-            belastingSection
-            dataSection
-            documentopslagSection
-            backupSection
-            overDeAppSection
+            formContent1
+            formContent2
         }
         .formStyle(.grouped)
         .navigationTitle("Instellingen")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    saveSettings()
-                } label: {
-                    Label("Opslaan", systemImage: "checkmark")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!hasChanges)
-                .help("Sla wijzigingen op (⌘S)")
-                .keyboardShortcut("s", modifiers: .command)
-            }
-        }
+        .toolbar { toolbarContent }
         .onAppear(perform: loadSettings)
-        .onChange(of: bedrijfsnaam) { markChanged() }
-        .onChange(of: eigenaar) { markChanged() }
-        .onChange(of: adres) { markChanged() }
-        .onChange(of: postcodeplaats) { markChanged() }
-        .onChange(of: telefoon) { markChanged() }
-        .onChange(of: email) { markChanged() }
-        .onChange(of: kvkNummer) { markChanged() }
-        .onChange(of: iban) { markChanged() }
-        .onChange(of: bank) { markChanged() }
-        .onChange(of: standaardUurtariefDag) { markChanged() }
-        .onChange(of: standaardUurtariefANW) { markChanged() }
-        .onChange(of: standaardKilometertarief) { markChanged() }
-        .onChange(of: standaardBetalingstermijn) { markChanged() }
-        .onChange(of: standaardBTWTarief) { markChanged() }
+        .modifier(SettingsChangeModifier(markChanged: markChanged,
+                                          bedrijfsnaam: $bedrijfsnaam,
+                                          eigenaar: $eigenaar,
+                                          adres: $adres,
+                                          postcodeplaats: $postcodeplaats,
+                                          telefoon: $telefoon,
+                                          email: $email,
+                                          kvkNummer: $kvkNummer,
+                                          iban: $iban,
+                                          bank: $bank,
+                                          standaardUurtariefDag: $standaardUurtariefDag,
+                                          standaardUurtariefANW: $standaardUurtariefANW,
+                                          standaardKilometertarief: $standaardKilometertarief,
+                                          standaardBetalingstermijn: $standaardBetalingstermijn,
+                                          standaardBTWTarief: $standaardBTWTarief,
+                                          afschrijvingDrempel: $afschrijvingDrempel,
+                                          afschrijvingMinJaren: $afschrijvingMinJaren,
+                                          afschrijvingMaxPercentage: $afschrijvingMaxPercentage,
+                                          afschrijvingRestwaarde: $afschrijvingRestwaarde,
+                                          afschrijvingFiscaalJaar: $afschrijvingFiscaalJaar))
+    }
+
+    @ViewBuilder
+    private var formContent1: some View {
+        bedrijfsgegevensSection
+        contactSection
+        registratieSection
+        tarievenSection
+        factuurnummeringSection
+    }
+
+    @ViewBuilder
+    private var formContent2: some View {
+        belastingSection
+        afschrijvingSection
+        dataSection
+        documentopslagSection
+        backupSection
+        overDeAppSection
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                saveSettings()
+            } label: {
+                Label("Opslaan", systemImage: "checkmark")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!hasChanges)
+            .help("Sla wijzigingen op (⌘S)")
+            .keyboardShortcut("s", modifiers: .command)
+        }
     }
 
     private func markChanged() {
@@ -203,6 +231,88 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var afschrijvingSection: some View {
+        Section("Afschrijving (bedrijfsmiddelen)") {
+            afschrijvingDrempelRow
+            afschrijvingMinJarenRow
+            afschrijvingMaxPercentageRow
+            afschrijvingRestwaardeRow
+            afschrijvingFiscaalJaarRow
+            afschrijvingFooterRow
+        }
+    }
+
+    private var afschrijvingDrempelRow: some View {
+        HStack {
+            Text("Afschrijvingsdrempel")
+            Spacer()
+            TextField("", value: $afschrijvingDrempel, format: .currency(code: "EUR"))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 100)
+                .multilineTextAlignment(.trailing)
+            Text("excl. BTW")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var afschrijvingMinJarenRow: some View {
+        HStack {
+            Text("Minimale afschrijvingstermijn")
+            Spacer()
+            TextField("", value: $afschrijvingMinJaren, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+                .multilineTextAlignment(.trailing)
+            Text("jaar")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var afschrijvingMaxPercentageRow: some View {
+        HStack {
+            Text("Maximale afschrijving per jaar")
+            Spacer()
+            TextField("", value: $afschrijvingMaxPercentage, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+                .multilineTextAlignment(.trailing)
+            Text("%")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var afschrijvingRestwaardeRow: some View {
+        HStack {
+            Text("Standaard restwaarde")
+            Spacer()
+            TextField("", value: $afschrijvingRestwaarde, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 60)
+                .multilineTextAlignment(.trailing)
+            Text("% van aanschafwaarde")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var afschrijvingFiscaalJaarRow: some View {
+        HStack {
+            Text("Fiscaal jaar")
+            Spacer()
+            TextField("", value: $afschrijvingFiscaalJaar, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 80)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private var afschrijvingFooterRow: some View {
+        Text("Uitgaven boven de drempel kunnen als bedrijfsmiddel worden afgeschreven over meerdere jaren.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
     }
 
     private var dataSection: some View {
@@ -438,6 +548,13 @@ struct SettingsView: View {
         standaardBetalingstermijn = settings.standaardBetalingstermijn
         standaardBTWTarief = settings.standaardBTWTarief
 
+        // Load depreciation settings
+        afschrijvingDrempel = settings.afschrijvingDrempel
+        afschrijvingMinJaren = settings.afschrijvingMinJaren
+        afschrijvingMaxPercentage = settings.afschrijvingMaxPercentage
+        afschrijvingRestwaarde = settings.afschrijvingRestwaarde
+        afschrijvingFiscaalJaar = settings.afschrijvingFiscaalJaar
+
         hasChanges = false
     }
 
@@ -458,6 +575,14 @@ struct SettingsView: View {
         settings.standaardKilometertarief = standaardKilometertarief
         settings.standaardBetalingstermijn = standaardBetalingstermijn
         settings.standaardBTWTarief = standaardBTWTarief
+
+        // Save depreciation settings
+        settings.afschrijvingDrempel = afschrijvingDrempel
+        settings.afschrijvingMinJaren = afschrijvingMinJaren
+        settings.afschrijvingMaxPercentage = afschrijvingMaxPercentage
+        settings.afschrijvingRestwaarde = afschrijvingRestwaarde
+        settings.afschrijvingFiscaalJaar = afschrijvingFiscaalJaar
+
         settings.updateTimestamp()
 
         try? modelContext.save()
@@ -618,6 +743,118 @@ struct BackupDocument: FileDocument {
 
         let jsonData = try encoder.encode(backupData)
         return FileWrapper(regularFileWithContents: jsonData)
+    }
+}
+
+// MARK: - Settings Change Modifier
+private struct SettingsChangeModifier: ViewModifier {
+    let markChanged: () -> Void
+    @Binding var bedrijfsnaam: String
+    @Binding var eigenaar: String
+    @Binding var adres: String
+    @Binding var postcodeplaats: String
+    @Binding var telefoon: String
+    @Binding var email: String
+    @Binding var kvkNummer: String
+    @Binding var iban: String
+    @Binding var bank: String
+    @Binding var standaardUurtariefDag: Decimal
+    @Binding var standaardUurtariefANW: Decimal
+    @Binding var standaardKilometertarief: Decimal
+    @Binding var standaardBetalingstermijn: Int
+    @Binding var standaardBTWTarief: BTWTarief
+    @Binding var afschrijvingDrempel: Decimal
+    @Binding var afschrijvingMinJaren: Int
+    @Binding var afschrijvingMaxPercentage: Decimal
+    @Binding var afschrijvingRestwaarde: Decimal
+    @Binding var afschrijvingFiscaalJaar: Int
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(BasicChangeModifier(markChanged: markChanged,
+                                           bedrijfsnaam: $bedrijfsnaam,
+                                           eigenaar: $eigenaar,
+                                           adres: $adres,
+                                           postcodeplaats: $postcodeplaats,
+                                           telefoon: $telefoon,
+                                           email: $email,
+                                           kvkNummer: $kvkNummer,
+                                           iban: $iban,
+                                           bank: $bank))
+            .modifier(TariefChangeModifier(markChanged: markChanged,
+                                           standaardUurtariefDag: $standaardUurtariefDag,
+                                           standaardUurtariefANW: $standaardUurtariefANW,
+                                           standaardKilometertarief: $standaardKilometertarief,
+                                           standaardBetalingstermijn: $standaardBetalingstermijn,
+                                           standaardBTWTarief: $standaardBTWTarief))
+            .modifier(AfschrijvingChangeModifier(markChanged: markChanged,
+                                                  afschrijvingDrempel: $afschrijvingDrempel,
+                                                  afschrijvingMinJaren: $afschrijvingMinJaren,
+                                                  afschrijvingMaxPercentage: $afschrijvingMaxPercentage,
+                                                  afschrijvingRestwaarde: $afschrijvingRestwaarde,
+                                                  afschrijvingFiscaalJaar: $afschrijvingFiscaalJaar))
+    }
+}
+
+private struct BasicChangeModifier: ViewModifier {
+    let markChanged: () -> Void
+    @Binding var bedrijfsnaam: String
+    @Binding var eigenaar: String
+    @Binding var adres: String
+    @Binding var postcodeplaats: String
+    @Binding var telefoon: String
+    @Binding var email: String
+    @Binding var kvkNummer: String
+    @Binding var iban: String
+    @Binding var bank: String
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: bedrijfsnaam) { markChanged() }
+            .onChange(of: eigenaar) { markChanged() }
+            .onChange(of: adres) { markChanged() }
+            .onChange(of: postcodeplaats) { markChanged() }
+            .onChange(of: telefoon) { markChanged() }
+            .onChange(of: email) { markChanged() }
+            .onChange(of: kvkNummer) { markChanged() }
+            .onChange(of: iban) { markChanged() }
+            .onChange(of: bank) { markChanged() }
+    }
+}
+
+private struct TariefChangeModifier: ViewModifier {
+    let markChanged: () -> Void
+    @Binding var standaardUurtariefDag: Decimal
+    @Binding var standaardUurtariefANW: Decimal
+    @Binding var standaardKilometertarief: Decimal
+    @Binding var standaardBetalingstermijn: Int
+    @Binding var standaardBTWTarief: BTWTarief
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: standaardUurtariefDag) { markChanged() }
+            .onChange(of: standaardUurtariefANW) { markChanged() }
+            .onChange(of: standaardKilometertarief) { markChanged() }
+            .onChange(of: standaardBetalingstermijn) { markChanged() }
+            .onChange(of: standaardBTWTarief) { markChanged() }
+    }
+}
+
+private struct AfschrijvingChangeModifier: ViewModifier {
+    let markChanged: () -> Void
+    @Binding var afschrijvingDrempel: Decimal
+    @Binding var afschrijvingMinJaren: Int
+    @Binding var afschrijvingMaxPercentage: Decimal
+    @Binding var afschrijvingRestwaarde: Decimal
+    @Binding var afschrijvingFiscaalJaar: Int
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: afschrijvingDrempel) { markChanged() }
+            .onChange(of: afschrijvingMinJaren) { markChanged() }
+            .onChange(of: afschrijvingMaxPercentage) { markChanged() }
+            .onChange(of: afschrijvingRestwaarde) { markChanged() }
+            .onChange(of: afschrijvingFiscaalJaar) { markChanged() }
     }
 }
 

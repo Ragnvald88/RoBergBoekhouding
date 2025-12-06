@@ -143,33 +143,54 @@ final class Asset {
     }
 
     /// Depreciation for a specific year
+    /// Uses pro-rata calculation for first and last years based on months in use.
     func afschrijvingVoorJaar(_ year: Int) -> Decimal {
         let calendar = Calendar.current
         let startYear = calendar.component(.year, from: inGebruikDatum)
-        let endYear = startYear + afschrijvingsjaren - 1
+        let startMonth = calendar.component(.month, from: inGebruikDatum)
+
+        // Calculate the actual end year, accounting for partial first year
+        // If start is not January, depreciation extends into an extra year
+        let monthsInFirstYear = 13 - startMonth
+        let remainingMonths = (afschrijvingsjaren * 12) - monthsInFirstYear
+        let additionalFullYears = remainingMonths / 12
+        let monthsInLastYear = remainingMonths % 12
+        let endYear = startYear + 1 + additionalFullYears + (monthsInLastYear > 0 ? 1 : 0) - 1
 
         guard year >= startYear && year <= endYear else { return 0 }
 
+        // Handle sale - no depreciation after sale year
         if let verkoopDatum = verkoopDatum {
             let saleYear = calendar.component(.year, from: verkoopDatum)
             if year > saleYear { return 0 }
+
+            // Partial year if sold during the year
+            if year == saleYear {
+                let saleMonth = calendar.component(.month, from: verkoopDatum)
+                if year == startYear {
+                    // Sold in same year as purchase
+                    let months = saleMonth - startMonth + 1
+                    return jaarlijkseAfschrijving * Decimal(max(0, months)) / 12
+                } else {
+                    // Sold in a later year
+                    return jaarlijkseAfschrijving * Decimal(saleMonth) / 12
+                }
+            }
         }
 
-        // First year: partial (from start month)
+        // First year: partial (from start month to December)
         if year == startYear {
-            let startMonth = calendar.component(.month, from: inGebruikDatum)
             let months = 13 - startMonth // Months remaining in first year
             return jaarlijkseAfschrijving * Decimal(months) / 12
         }
 
-        // Last year: partial (remaining amount)
-        if year == endYear {
-            let startMonth = calendar.component(.month, from: inGebruikDatum)
-            let months = startMonth - 1 // Months in final year
-            return jaarlijkseAfschrijving * Decimal(months) / 12
+        // Last year: partial (January to anniversary month - 1)
+        // This is the remaining portion that completes the full depreciation period
+        if year == endYear && monthsInLastYear > 0 {
+            return jaarlijkseAfschrijving * Decimal(monthsInLastYear) / 12
         }
 
-        // Full year
+        // Full year (applies to all years between first and last)
         return jaarlijkseAfschrijving
     }
 
@@ -253,6 +274,11 @@ final class Asset {
         isActief = false
         updateTimestamp()
     }
+}
+
+// MARK: - Notification Names
+extension NSNotification.Name {
+    static let assetCreated = NSNotification.Name("assetCreated")
 }
 
 // MARK: - Array Extensions

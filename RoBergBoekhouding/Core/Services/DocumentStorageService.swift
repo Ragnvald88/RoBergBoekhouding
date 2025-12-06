@@ -1,5 +1,9 @@
 import Foundation
 import AppKit
+import os.log
+
+/// Logger for document storage operations
+private let storageLogger = Logger(subsystem: "nl.uurwerker", category: "DocumentStorage")
 
 /// Centralized service for managing persistent document storage (PDFs, receipts, etc.)
 class DocumentStorageService {
@@ -20,6 +24,8 @@ class DocumentStorageService {
         case cannotWriteFile
         case fileNotFound
         case invalidPath
+        case pathTraversalAttempt
+        case pathOutsideSandbox
 
         var errorDescription: String? {
             switch self {
@@ -31,8 +37,89 @@ class DocumentStorageService {
                 return "Bestand niet gevonden"
             case .invalidPath:
                 return "Ongeldig bestandspad"
+            case .pathTraversalAttempt:
+                return "Onveilig bestandspad gedetecteerd"
+            case .pathOutsideSandbox:
+                return "Pad valt buiten toegestane map"
             }
         }
+    }
+
+    // MARK: - Path Validation
+
+    /// Characters allowed in identifiers (alphanumeric, dash, underscore, space, period)
+    private static let allowedIdentifierCharacters = CharacterSet.alphanumerics
+        .union(CharacterSet(charactersIn: "-_. "))
+
+    /// Sanitize an identifier to prevent path traversal attacks
+    /// - Parameter identifier: The raw identifier
+    /// - Returns: A safe identifier for use in filenames
+    private func sanitizeIdentifier(_ identifier: String) -> String {
+        // Remove any path traversal sequences
+        var safe = identifier
+            .replacingOccurrences(of: "..", with: "")
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: "\\", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+
+        // Filter to only allowed characters
+        safe = String(safe.unicodeScalars.filter {
+            Self.allowedIdentifierCharacters.contains($0)
+        })
+
+        // Ensure not empty
+        if safe.isEmpty {
+            safe = "document"
+        }
+
+        // Limit length
+        if safe.count > 100 {
+            safe = String(safe.prefix(100))
+        }
+
+        storageLogger.debug("Sanitized identifier: '\(identifier)' -> '\(safe)'")
+        return safe
+    }
+
+    /// Validate that a resolved path is within the expected base directory
+    /// - Parameters:
+    ///   - path: The path to validate
+    ///   - baseDirectory: The expected base directory
+    /// - Returns: true if path is safely within base directory
+    private func isPathWithinBase(_ path: URL, baseDirectory: URL) -> Bool {
+        let resolvedPath = path.standardizedFileURL.resolvingSymlinksInPath()
+        let resolvedBase = baseDirectory.standardizedFileURL.resolvingSymlinksInPath()
+
+        return resolvedPath.path.hasPrefix(resolvedBase.path)
+    }
+
+    /// Validate a custom base path
+    /// - Parameter path: The custom path to validate
+    /// - Returns: A validated URL
+    /// - Throws: StorageError if path is invalid or dangerous
+    private func validateCustomPath(_ path: String) throws -> URL {
+        guard !path.isEmpty else {
+            throw StorageError.invalidPath
+        }
+
+        // Check for path traversal patterns
+        if path.contains("..") {
+            storageLogger.warning("Path traversal attempt detected in custom path: \(path)")
+            throw StorageError.pathTraversalAttempt
+        }
+
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+
+        // Verify it's not a system directory
+        let systemPaths = ["/System", "/Library", "/usr", "/bin", "/sbin", "/private", "/var"]
+        for systemPath in systemPaths {
+            if url.path.hasPrefix(systemPath) {
+                storageLogger.warning("Attempt to use system path: \(path)")
+                throw StorageError.pathOutsideSandbox
+            }
+        }
+
+        return url
     }
 
     // MARK: - Properties
@@ -52,9 +139,27 @@ class DocumentStorageService {
     // MARK: - Public Methods
 
     /// Get the base documents directory (custom or default)
+    /// For validated custom paths, use validatedDocumentsDirectory instead
     func documentsDirectory(customPath: String? = nil) -> URL {
         if let custom = customPath, !custom.isEmpty {
-            return URL(fileURLWithPath: custom)
+            // Try to validate, fallback to default if validation fails
+            if let validated = try? validateCustomPath(custom) {
+                return validated
+            } else {
+                storageLogger.warning("Invalid custom path, falling back to default: \(custom)")
+                return defaultDocumentsDirectory
+            }
+        }
+        return defaultDocumentsDirectory
+    }
+
+    /// Get the base documents directory with explicit validation
+    /// - Parameter customPath: Optional custom path
+    /// - Returns: Validated URL
+    /// - Throws: StorageError if custom path is invalid
+    func validatedDocumentsDirectory(customPath: String? = nil) throws -> URL {
+        if let custom = customPath, !custom.isEmpty {
+            return try validateCustomPath(custom)
         }
         return defaultDocumentsDirectory
     }
@@ -81,15 +186,23 @@ class DocumentStorageService {
         // Create directory structure
         try createDirectoryIfNeeded(at: yearDir)
 
-        // Sanitize filename
-        let safeIdentifier = identifier.replacingOccurrences(of: "/", with: "-")
+        // Sanitize filename using proper validation
+        let safeIdentifier = sanitizeIdentifier(identifier)
         let filename = "\(safeIdentifier).pdf"
         let fileURL = yearDir.appendingPathComponent(filename)
+
+        // Verify the final path is within our base directory (defense in depth)
+        guard isPathWithinBase(fileURL, baseDirectory: baseDir) else {
+            storageLogger.error("Path traversal attempt blocked: \(fileURL.path)")
+            throw StorageError.pathTraversalAttempt
+        }
 
         // Write file
         do {
             try data.write(to: fileURL, options: [.atomic])
+            storageLogger.info("Stored PDF: \(filename)")
         } catch {
+            storageLogger.error("Failed to write PDF: \(error.localizedDescription)")
             throw StorageError.cannotWriteFile
         }
 
@@ -116,8 +229,21 @@ class DocumentStorageService {
     /// - Returns: Full URL to the file
     func url(for relativePath: String, customBasePath: String? = nil) -> URL? {
         guard !relativePath.isEmpty else { return nil }
+
+        // Check for path traversal in relative path
+        if relativePath.contains("..") {
+            storageLogger.warning("Path traversal attempt in relative path: \(relativePath)")
+            return nil
+        }
+
         let baseDir = documentsDirectory(customPath: customBasePath)
         let fullURL = baseDir.appendingPathComponent(relativePath)
+
+        // Verify the resolved path is within base directory
+        guard isPathWithinBase(fullURL, baseDirectory: baseDir) else {
+            storageLogger.warning("Path escaped base directory: \(fullURL.path)")
+            return nil
+        }
 
         // Verify file exists
         guard fileManager.fileExists(atPath: fullURL.path) else {
@@ -130,8 +256,21 @@ class DocumentStorageService {
     /// Check if a document exists at the given relative path
     func documentExists(at relativePath: String, customBasePath: String? = nil) -> Bool {
         guard !relativePath.isEmpty else { return false }
+
+        // Check for path traversal
+        if relativePath.contains("..") {
+            storageLogger.warning("Path traversal attempt in document check: \(relativePath)")
+            return false
+        }
+
         let baseDir = documentsDirectory(customPath: customBasePath)
         let fullURL = baseDir.appendingPathComponent(relativePath)
+
+        // Verify the resolved path is within base directory
+        guard isPathWithinBase(fullURL, baseDirectory: baseDir) else {
+            return false
+        }
+
         return fileManager.fileExists(atPath: fullURL.path)
     }
 
