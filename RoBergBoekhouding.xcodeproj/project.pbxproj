@@ -31,6 +31,7 @@
 		MOD002 /* TimeEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC005 /* TimeEntry.swift */; };
 		MOD003 /* Invoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC006 /* Invoice.swift */; };
 		MOD004 /* Expense.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC007 /* Expense.swift */; };
+		AST002 /* Asset.swift in Sources */ = {isa = PBXBuildFile; fileRef = AST001 /* Asset.swift */; };
 		MOD005 /* BusinessSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC008 /* BusinessSettings.swift */; };
 		MOD006 /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRC009 /* Enums.swift */; };
 		RES001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = RES001F /* Assets.xcassets */; };
@@ -69,6 +70,7 @@
 		SRC005 /* TimeEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeEntry.swift; sourceTree = "<group>"; };
 		SRC006 /* Invoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Invoice.swift; sourceTree = "<group>"; };
 		SRC007 /* Expense.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Expense.swift; sourceTree = "<group>"; };
+		AST001 /* Asset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Asset.swift; sourceTree = "<group>"; };
 		SRC008 /* BusinessSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BusinessSettings.swift; sourceTree = "<group>"; };
 		SRC009 /* Enums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Enums.swift; sourceTree = "<group>"; };
 		SRC010 /* DutchFormatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DutchFormatters.swift; sourceTree = "<group>"; };
@@ -238,6 +240,7 @@
 				SRC005 /* TimeEntry.swift */,
 				SRC006 /* Invoice.swift */,
 				SRC007 /* Expense.swift */,
+				AST001 /* Asset.swift */,
 				SRC008 /* BusinessSettings.swift */,
 				SRC009 /* Enums.swift */,
 			);
@@ -403,6 +406,7 @@
 				MOD002 /* TimeEntry.swift in Sources */,
 				MOD003 /* Invoice.swift in Sources */,
 				MOD004 /* Expense.swift in Sources */,
+				AST002 /* Asset.swift in Sources */,
 				MOD005 /* BusinessSettings.swift in Sources */,
 				MOD006 /* Enums.swift in Sources */,
 				UTL001 /* DutchFormatters.swift in Sources */,

@@ -17,6 +17,18 @@ final class Expense {
     var createdAt: Date
     var updatedAt: Date
 
+    // MARK: - Depreciation Properties
+    var isDepreciable: Bool             // Is this a depreciable asset?
+    var factuurNummer: String?          // Supplier invoice number
+
+    // MARK: - OCR Properties
+    var ocrConfidence: Double?          // OCR confidence score (0-1)
+    var ocrRawText: String?             // Raw OCR extracted text
+
+    // MARK: - Relationships
+    @Relationship(deleteRule: .nullify, inverse: \Asset.expense)
+    var asset: Asset?                   // Linked asset if depreciable
+
     // MARK: - Computed Properties
     var categorie: ExpenseCategory {
         get { ExpenseCategory(rawValue: categorieRaw) ?? .overig }
@@ -115,6 +127,8 @@ final class Expense {
         documentPath: String? = nil,
         zakelijkPercentage: Decimal = 100,
         isRecurring: Bool = false,
+        isDepreciable: Bool = false,
+        factuurNummer: String? = nil,
         notities: String? = nil
     ) {
         self.id = id
@@ -128,6 +142,8 @@ final class Expense {
         // Validate: percentage must be between 0 and 100
         self.zakelijkPercentage = min(100, max(0, zakelijkPercentage))
         self.isRecurring = isRecurring
+        self.isDepreciable = isDepreciable
+        self.factuurNummer = factuurNummer
         self.notities = notities
         self.createdAt = Date()
         self.updatedAt = Date()

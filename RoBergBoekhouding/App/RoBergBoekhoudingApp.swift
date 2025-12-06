@@ -19,6 +19,7 @@ struct UurwerkerApp: App {
             TimeEntry.self,
             Invoice.self,
             Expense.self,
+            Asset.self,
             BusinessSettings.self
         ])
 

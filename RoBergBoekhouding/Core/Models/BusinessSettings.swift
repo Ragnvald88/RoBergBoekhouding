@@ -33,6 +33,14 @@ final class BusinessSettings {
     // MARK: - Onboarding
     var hasCompletedOnboarding: Bool = false // Track if user has completed initial setup
 
+    // MARK: - Depreciation Settings (Afschrijvingsinstellingen)
+    // These can be overridden as tax rules change per fiscal year
+    var afschrijvingDrempel: Decimal         // €450 - below this, direct deduction
+    var afschrijvingMinJaren: Int            // 5 years minimum
+    var afschrijvingMaxPercentage: Decimal   // 20% max per year
+    var afschrijvingRestwaarde: Decimal      // 10% default residual value
+    var afschrijvingFiscaalJaar: Int         // Year these settings apply to
+
     // MARK: - Branding
     var logoPath: String?                   // Path to company logo
     var primaryColorHex: String?            // Brand color for invoices
@@ -144,6 +152,11 @@ final class BusinessSettings {
         btwVrijgesteld: Bool = true,
         standaardBTWTarief: BTWTarief = .vrijgesteld,
         hasCompletedOnboarding: Bool = false,
+        // Depreciation defaults (Dutch 2024/2025 rules)
+        afschrijvingDrempel: Decimal = 450,
+        afschrijvingMinJaren: Int = 5,
+        afschrijvingMaxPercentage: Decimal = 20,
+        afschrijvingRestwaarde: Decimal = 10,
         logoPath: String? = nil,
         primaryColorHex: String? = nil,
         invoiceFooterText: String? = nil
@@ -168,11 +181,41 @@ final class BusinessSettings {
         self.btwVrijgesteld = btwVrijgesteld
         self.standaardBTWTariefRaw = standaardBTWTarief.rawValue
         self.hasCompletedOnboarding = hasCompletedOnboarding
+        // Depreciation settings
+        self.afschrijvingDrempel = afschrijvingDrempel
+        self.afschrijvingMinJaren = afschrijvingMinJaren
+        self.afschrijvingMaxPercentage = afschrijvingMaxPercentage
+        self.afschrijvingRestwaarde = afschrijvingRestwaarde
+        self.afschrijvingFiscaalJaar = Calendar.current.component(.year, from: Date())
         self.logoPath = logoPath
         self.primaryColorHex = primaryColorHex
         self.invoiceFooterText = invoiceFooterText
         self.createdAt = Date()
         self.updatedAt = Date()
+    }
+
+    // MARK: - Depreciation Helpers
+
+    /// Check if an amount qualifies for depreciation (above threshold)
+    func qualifiesForDepreciation(amount: Decimal) -> Bool {
+        amount >= afschrijvingDrempel
+    }
+
+    /// Calculate default residual value for a purchase amount
+    func defaultRestwaarde(for amount: Decimal) -> Decimal {
+        amount * (afschrijvingRestwaarde / 100)
+    }
+
+    /// Calculate annual depreciation for an asset
+    func annualDepreciation(purchaseValue: Decimal, residualValue: Decimal, years: Int, businessPercentage: Decimal = 100) -> Decimal {
+        let depreciableAmount = purchaseValue - residualValue
+        let annualAmount = depreciableAmount / Decimal(years)
+        return annualAmount * (businessPercentage / 100)
+    }
+
+    /// Validate depreciation years against minimum requirement
+    func validateDepreciationYears(_ years: Int) -> Int {
+        max(years, afschrijvingMinJaren)
     }
 
     // MARK: - Methods
