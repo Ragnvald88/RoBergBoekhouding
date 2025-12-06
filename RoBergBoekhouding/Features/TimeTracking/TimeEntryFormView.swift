@@ -105,32 +105,38 @@ struct TimeEntryFormView: View {
                     Toggle(isOn: $isSharedShift) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Gedeelde dienst")
-                            Text("Meerdere praktijken betalen - uren worden naar rato verdeeld")
+                            Text("Meerdere klanten betalen voor dezelfde dienst")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .help("Voor diensten waarbij meerdere praktijken betalen (bijv. HOED, vakantiewaarneming)")
+                    .help("Voor diensten waarbij meerdere klanten betalen (bijv. HOED, vakantiewaarneming)")
 
                     if isSharedShift {
-                        HStack {
-                            Text("Jouw aandeel")
-                            Spacer()
-                            Slider(value: $verdeelfactor, in: 0.1...1.0, step: 0.01)
-                                .frame(width: 150)
-                            Text("\(Int(verdeelfactor * 100))%")
-                                .monospacedDigit()
-                                .frame(width: 40)
-                        }
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Aandeel deze klant")
+                                Spacer()
+                                Slider(value: $verdeelfactor, in: 0.05...1.0, step: 0.05)
+                                    .frame(width: 150)
+                                Text("\(Int(verdeelfactor * 100))%")
+                                    .monospacedDigit()
+                                    .frame(width: 45, alignment: .trailing)
+                            }
 
-                        HStack {
-                            Text("Proportionele uren")
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("\((uren * Decimal(verdeelfactor)).asDecimal) van \(uren.asDecimal) uur")
-                                .font(.caption)
-                                .foregroundStyle(.blue)
+                            HStack {
+                                Text("Te factureren")
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\((uren * Decimal(verdeelfactor)).asDecimal) uur")
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.blue)
+                                Text("van \(uren.asDecimal) totaal")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
                 }
 

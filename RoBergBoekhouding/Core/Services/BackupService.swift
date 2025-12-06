@@ -143,6 +143,315 @@ actor BackupService {
         let backups = try listBackups()
         return backups.reduce(0) { $0 + $1.sizeBytes }
     }
+
+    // MARK: - Export Backup to User Location
+    /// Exports backup to a user-selected location
+    func exportBackup(modelContext: ModelContext, to destinationURL: URL) async throws {
+        let exportData = try await exportAllData(modelContext: modelContext)
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+        let jsonData = try encoder.encode(exportData)
+        try jsonData.write(to: destinationURL)
+    }
+
+    // MARK: - Restore Backup
+    /// Restores data from a backup file
+    /// - Parameters:
+    ///   - url: URL of the backup JSON file
+    ///   - modelContext: The SwiftData model context
+    ///   - clearExisting: If true, deletes all existing data before restore
+    /// - Returns: RestoreResult with counts of restored items
+    func restoreBackup(from url: URL, modelContext: ModelContext, clearExisting: Bool) async throws -> RestoreResult {
+        // Read and decode backup file
+        let jsonData = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let backupData = try decoder.decode(BackupData.self, from: jsonData)
+
+        // Clear existing data if requested
+        if clearExisting {
+            try await clearAllData(modelContext: modelContext)
+        }
+
+        var result = RestoreResult()
+
+        // 1. Restore Settings first
+        if let settingsExport = backupData.settings {
+            let settings = BusinessSettings(
+                bedrijfsnaam: settingsExport.bedrijfsnaam,
+                eigenaar: settingsExport.eigenaar,
+                adres: settingsExport.adres,
+                postcodeplaats: settingsExport.postcodeplaats,
+                telefoon: settingsExport.telefoon,
+                email: settingsExport.email,
+                kvkNummer: settingsExport.kvkNummer,
+                iban: settingsExport.iban,
+                bank: settingsExport.bank,
+                standaardUurtariefDag: settingsExport.standaardUurtariefDag,
+                standaardKilometertarief: settingsExport.standaardKilometertarief,
+                standaardBetalingstermijn: settingsExport.standaardBetalingstermijn
+            )
+            modelContext.insert(settings)
+            result.settingsRestored = true
+        }
+
+        // 2. Restore Clients - build ID mapping for relationships
+        var clientMap: [UUID: Client] = [:]
+        for clientExport in backupData.clients {
+            // Check for duplicate by name if not clearing
+            if !clearExisting {
+                let descriptor = FetchDescriptor<Client>(
+                    predicate: #Predicate { $0.bedrijfsnaam == clientExport.bedrijfsnaam }
+                )
+                if let existing = try? modelContext.fetch(descriptor).first {
+                    clientMap[clientExport.id] = existing
+                    result.clientsSkipped += 1
+                    continue
+                }
+            }
+
+            let client = Client(
+                bedrijfsnaam: clientExport.bedrijfsnaam,
+                contactpersoon: clientExport.contactpersoon,
+                adres: clientExport.adres,
+                postcodeplaats: clientExport.postcodeplaats,
+                telefoon: clientExport.telefoon,
+                email: clientExport.email,
+                standaardUurtarief: clientExport.standaardUurtarief,
+                standaardKmTarief: clientExport.standaardKmTarief,
+                afstandRetour: clientExport.afstandRetour,
+                clientType: ClientType(rawValue: clientExport.clientType) ?? .zakelijk,
+                isActive: clientExport.isActive
+            )
+            modelContext.insert(client)
+            clientMap[clientExport.id] = client
+            result.clientsRestored += 1
+        }
+
+        // 3. Restore Expenses
+        for expenseExport in backupData.expenses {
+            // Check for duplicate by date + amount + description
+            if !clearExisting {
+                let datum = expenseExport.datum
+                let bedrag = expenseExport.bedrag
+                let omschrijving = expenseExport.omschrijving
+                let descriptor = FetchDescriptor<Expense>(
+                    predicate: #Predicate { $0.datum == datum && $0.bedrag == bedrag && $0.omschrijving == omschrijving }
+                )
+                if (try? modelContext.fetch(descriptor).first) != nil {
+                    result.expensesSkipped += 1
+                    continue
+                }
+            }
+
+            let expense = Expense(
+                datum: expenseExport.datum,
+                omschrijving: expenseExport.omschrijving,
+                bedrag: expenseExport.bedrag,
+                categorie: ExpenseCategory(rawValue: expenseExport.categorie) ?? .overig,
+                leverancier: expenseExport.leverancier,
+                zakelijkPercentage: expenseExport.zakelijkPercentage,
+                isRecurring: expenseExport.isRecurring
+            )
+            expense.documentPath = expenseExport.documentPath
+            modelContext.insert(expense)
+            result.expensesRestored += 1
+        }
+
+        // 4. Restore Time Entries
+        var entryMap: [UUID: TimeEntry] = [:]
+        for entryExport in backupData.timeEntries {
+            // Check for duplicate by date + client + hours
+            if !clearExisting {
+                let datum = entryExport.datum
+                let uren = entryExport.uren
+                let descriptor = FetchDescriptor<TimeEntry>(
+                    predicate: #Predicate { $0.datum == datum && $0.uren == uren }
+                )
+                if let existing = try? modelContext.fetch(descriptor).first,
+                   existing.client?.id == entryExport.clientId {
+                    entryMap[entryExport.id] = existing
+                    result.timeEntriesSkipped += 1
+                    continue
+                }
+            }
+
+            let entry = TimeEntry(
+                datum: entryExport.datum,
+                activiteit: entryExport.activiteit,
+                locatie: entryExport.locatie,
+                uren: entryExport.uren,
+                visiteKilometers: entryExport.visiteKilometers,
+                retourafstandWoonWerk: entryExport.retourafstandWoonWerk,
+                uurtarief: entryExport.uurtarief,
+                kilometertarief: entryExport.kilometertarief,
+                isBillable: entryExport.isBillable,
+                isInvoiced: entryExport.isInvoiced,
+                factuurnummer: entryExport.factuurnummer
+            )
+
+            // Link to client
+            if let clientId = entryExport.clientId, let client = clientMap[clientId] {
+                entry.client = client
+            }
+
+            modelContext.insert(entry)
+            entryMap[entryExport.id] = entry
+            result.timeEntriesRestored += 1
+        }
+
+        // 5. Restore Invoices and link time entries
+        for invoiceExport in backupData.invoices {
+            // Check for duplicate by invoice number
+            if !clearExisting {
+                let nummer = invoiceExport.factuurnummer
+                let descriptor = FetchDescriptor<Invoice>(
+                    predicate: #Predicate { $0.factuurnummer == nummer }
+                )
+                if (try? modelContext.fetch(descriptor).first) != nil {
+                    result.invoicesSkipped += 1
+                    continue
+                }
+            }
+
+            let invoice = Invoice(
+                factuurnummer: invoiceExport.factuurnummer,
+                factuurdatum: invoiceExport.factuurdatum,
+                betalingstermijn: 14,
+                status: InvoiceStatus(rawValue: invoiceExport.status) ?? .concept
+            )
+            invoice.notities = invoiceExport.notities
+            invoice.pdfPath = invoiceExport.pdfPath
+
+            // Link to client
+            if let clientId = invoiceExport.clientId, let client = clientMap[clientId] {
+                invoice.client = client
+            }
+
+            // Link time entries by matching factuurnummer
+            let matchingEntries = backupData.timeEntries.filter { $0.factuurnummer == invoiceExport.factuurnummer }
+            for entryExport in matchingEntries {
+                if let entry = entryMap[entryExport.id] {
+                    entry.invoice = invoice
+                    entry.isInvoiced = true
+                }
+            }
+
+            modelContext.insert(invoice)
+            result.invoicesRestored += 1
+        }
+
+        try modelContext.save()
+        return result
+    }
+
+    // MARK: - Clear All Data
+    private func clearAllData(modelContext: ModelContext) async throws {
+        // Delete in order to respect relationships
+        let invoices = try modelContext.fetch(FetchDescriptor<Invoice>())
+        for invoice in invoices { modelContext.delete(invoice) }
+
+        let entries = try modelContext.fetch(FetchDescriptor<TimeEntry>())
+        for entry in entries { modelContext.delete(entry) }
+
+        let expenses = try modelContext.fetch(FetchDescriptor<Expense>())
+        for expense in expenses { modelContext.delete(expense) }
+
+        let clients = try modelContext.fetch(FetchDescriptor<Client>())
+        for client in clients { modelContext.delete(client) }
+
+        let settings = try modelContext.fetch(FetchDescriptor<BusinessSettings>())
+        for setting in settings { modelContext.delete(setting) }
+
+        try modelContext.save()
+    }
+
+    // MARK: - Validate Backup File
+    /// Validates a backup file without importing
+    func validateBackup(at url: URL) throws -> BackupValidation {
+        let jsonData = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let backupData = try decoder.decode(BackupData.self, from: jsonData)
+
+        return BackupValidation(
+            isValid: true,
+            version: backupData.version,
+            appVersion: backupData.appVersion,
+            createdAt: backupData.createdAt,
+            clientCount: backupData.clients.count,
+            timeEntryCount: backupData.timeEntries.count,
+            invoiceCount: backupData.invoices.count,
+            expenseCount: backupData.expenses.count,
+            hasSettings: backupData.settings != nil
+        )
+    }
+}
+
+// MARK: - Restore Result
+struct RestoreResult {
+    var settingsRestored: Bool = false
+    var clientsRestored: Int = 0
+    var clientsSkipped: Int = 0
+    var timeEntriesRestored: Int = 0
+    var timeEntriesSkipped: Int = 0
+    var invoicesRestored: Int = 0
+    var invoicesSkipped: Int = 0
+    var expensesRestored: Int = 0
+    var expensesSkipped: Int = 0
+
+    var summary: String {
+        var parts: [String] = []
+        if clientsRestored > 0 { parts.append("\(clientsRestored) klanten") }
+        if timeEntriesRestored > 0 { parts.append("\(timeEntriesRestored) uren") }
+        if invoicesRestored > 0 { parts.append("\(invoicesRestored) facturen") }
+        if expensesRestored > 0 { parts.append("\(expensesRestored) uitgaven") }
+        if settingsRestored { parts.append("instellingen") }
+
+        if parts.isEmpty { return "Geen nieuwe gegevens hersteld" }
+        return "Hersteld: " + parts.joined(separator: ", ")
+    }
+
+    var skippedSummary: String? {
+        var parts: [String] = []
+        if clientsSkipped > 0 { parts.append("\(clientsSkipped) klanten") }
+        if timeEntriesSkipped > 0 { parts.append("\(timeEntriesSkipped) uren") }
+        if invoicesSkipped > 0 { parts.append("\(invoicesSkipped) facturen") }
+        if expensesSkipped > 0 { parts.append("\(expensesSkipped) uitgaven") }
+
+        if parts.isEmpty { return nil }
+        return "Overgeslagen (duplicaten): " + parts.joined(separator: ", ")
+    }
+}
+
+// MARK: - Backup Validation
+struct BackupValidation {
+    let isValid: Bool
+    let version: String
+    let appVersion: String
+    let createdAt: Date
+    let clientCount: Int
+    let timeEntryCount: Int
+    let invoiceCount: Int
+    let expenseCount: Int
+    let hasSettings: Bool
+
+    var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.timeStyle = .short
+        formatter.locale = Locale(identifier: "nl_NL")
+        return formatter.string(from: createdAt)
+    }
+
+    var totalRecords: Int {
+        clientCount + timeEntryCount + invoiceCount + expenseCount + (hasSettings ? 1 : 0)
+    }
 }
 
 // MARK: - Backup Data Model

@@ -233,13 +233,15 @@ private struct ContactStep: View {
                     TextField("Adres", text: $formData.adres)
                         .textFieldStyle(.roundedBorder)
 
-                    HStack {
-                        TextField("Postcode", text: $formData.postcode)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 120)
+                    LabeledContent("Postcode / Plaats") {
+                        HStack(spacing: Spacing.sm) {
+                            TextField("1234 AB", text: $formData.postcode)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 100)
 
-                        TextField("Plaats", text: $formData.plaats)
-                            .textFieldStyle(.roundedBorder)
+                            TextField("Plaatsnaam", text: $formData.plaats)
+                                .textFieldStyle(.roundedBorder)
+                        }
                     }
 
                     TextField("E-mailadres", text: $formData.email)
@@ -323,6 +325,7 @@ private struct RatesStep: View {
 
     @State private var uurtariefText = "75"
     @State private var kmTariefText = "0,23"
+    @State private var betalingstermijnText = "14"
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
@@ -334,12 +337,11 @@ private struct RatesStep: View {
 
             Form {
                 Section {
-                    HStack {
-                        Text("Uurtarief")
-                        Spacer()
+                    LabeledContent("Uurtarief") {
                         HStack(spacing: 4) {
                             Text("€")
-                            TextField("", text: $uurtariefText)
+                                .foregroundStyle(.secondary)
+                            TextField("75", text: $uurtariefText)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                                 .multilineTextAlignment(.trailing)
@@ -351,12 +353,11 @@ private struct RatesStep: View {
                         }
                     }
 
-                    HStack {
-                        Text("Kilometervergoeding")
-                        Spacer()
+                    LabeledContent("Kilometervergoeding") {
                         HStack(spacing: 4) {
                             Text("€")
-                            TextField("", text: $kmTariefText)
+                                .foregroundStyle(.secondary)
+                            TextField("0,23", text: $kmTariefText)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 80)
                                 .multilineTextAlignment(.trailing)
@@ -368,7 +369,21 @@ private struct RatesStep: View {
                         }
                     }
 
-                    Stepper("Betalingstermijn: \(formData.betalingstermijn) dagen", value: $formData.betalingstermijn, in: 7...60)
+                    LabeledContent("Betalingstermijn") {
+                        HStack(spacing: 4) {
+                            TextField("14", text: $betalingstermijnText)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 80)
+                                .multilineTextAlignment(.trailing)
+                                .onChange(of: betalingstermijnText) { _, newValue in
+                                    if let value = Int(newValue) {
+                                        formData.betalingstermijn = max(7, min(60, value))
+                                    }
+                                }
+                            Text("dagen")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 } footer: {
                     Text("De standaard kilometervergoeding is €0,23 per km (belastingvrij).")
                 }
@@ -395,9 +410,10 @@ private struct RatesStep: View {
         }
         .padding(Spacing.lg)
         .onAppear {
-            // Initialize text fields with current values
-            uurtariefText = formData.uurtarief.description.replacingOccurrences(of: ".", with: ",")
-            kmTariefText = formData.kmTarief.description.replacingOccurrences(of: ".", with: ",")
+            // Initialize text fields with properly formatted values
+            uurtariefText = String(format: "%.0f", Double(truncating: formData.uurtarief as NSNumber))
+            kmTariefText = String(format: "%.2f", Double(truncating: formData.kmTarief as NSNumber)).replacingOccurrences(of: ".", with: ",")
+            betalingstermijnText = "\(formData.betalingstermijn)"
         }
     }
 }

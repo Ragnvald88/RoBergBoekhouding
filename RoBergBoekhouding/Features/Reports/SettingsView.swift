@@ -31,6 +31,14 @@ struct SettingsView: View {
     @State private var showingAboutView = false
     @State private var isCreatingBackup = false
     @State private var lastBackupDate: Date? = nil
+    @State private var showingExportPanel = false
+    @State private var showingRestorePanel = false
+    @State private var backupValidation: BackupValidation? = nil
+    @State private var isRestoring = false
+    @State private var restoreResult: RestoreResult? = nil
+    @State private var showRestoreConfirmation = false
+    @State private var pendingRestoreURL: URL? = nil
+    @State private var clearExistingOnRestore = false
 
     var body: some View {
         settingsForm
@@ -248,26 +256,94 @@ struct SettingsView: View {
 
     // MARK: - Backup Section
     private var backupSection: some View {
-        Section("Backup") {
+        Section("Backup & Herstel") {
+            // Create backup
             HStack {
                 VStack(alignment: .leading) {
-                    Text("Database backup")
-                        .font(.headline)
-                    Text("Maak een JSON-backup van al je gegevens")
+                    Text("Backup maken")
+                        .font(.subheadline.weight(.medium))
+                    Text("Automatische backup in app-map")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-
                 Spacer()
-
                 Button("Maak backup") {
-                    Task {
-                        await createBackup()
-                    }
+                    Task { await createBackup() }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
                 .disabled(isCreatingBackup)
             }
+
+            // Export to location
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Exporteer backup")
+                        .font(.subheadline.weight(.medium))
+                    Text("Sla op naar iCloud, USB of andere locatie")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Exporteer...") {
+                    showingExportPanel = true
+                }
+                .buttonStyle(.bordered)
+                .disabled(isCreatingBackup)
+            }
+
+            Divider()
+
+            // Restore backup
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Backup herstellen")
+                        .font(.subheadline.weight(.medium))
+                    Text("Herstel gegevens uit een backup bestand")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Herstel...") {
+                    showingRestorePanel = true
+                }
+                .buttonStyle(.bordered)
+                .disabled(isRestoring)
+            }
+
+            // Show restore result
+            if let result = restoreResult {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text(result.summary)
+                            .font(.caption)
+                    }
+                    if let skipped = result.skippedSummary {
+                        Text(skipped)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            // Show validation preview
+            if let validation = backupValidation {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Backup bevat:")
+                        .font(.caption.weight(.medium))
+                    Text("\(validation.clientCount) klanten, \(validation.timeEntryCount) uren, \(validation.invoiceCount) facturen, \(validation.expenseCount) uitgaven")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Gemaakt: \(validation.formattedDate)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.vertical, 4)
+            }
+
+            Divider()
 
             if let lastBackupDate = lastBackupDate {
                 HStack {
@@ -279,9 +355,47 @@ struct SettingsView: View {
             }
 
             Button("Open backup map") {
-                Task {
-                    await BackupService.shared.openBackupFolder()
-                }
+                Task { await BackupService.shared.openBackupFolder() }
+            }
+        }
+        .fileExporter(
+            isPresented: $showingExportPanel,
+            document: BackupDocument(modelContext: modelContext),
+            contentType: .json,
+            defaultFilename: "uurwerker_backup_\(Date().standardDutch).json"
+        ) { result in
+            switch result {
+            case .success(let url):
+                appState.showAlert(title: "Backup geëxporteerd", message: "Opgeslagen naar: \(url.lastPathComponent)")
+            case .failure(let error):
+                appState.showAlert(title: "Export mislukt", message: error.localizedDescription)
+            }
+        }
+        .fileImporter(
+            isPresented: $showingRestorePanel,
+            allowedContentTypes: [.json],
+            allowsMultipleSelection: false
+        ) { result in
+            handleRestoreFileSelection(result)
+        }
+        .alert("Backup herstellen", isPresented: $showRestoreConfirmation) {
+            Button("Annuleren", role: .cancel) {
+                pendingRestoreURL = nil
+                backupValidation = nil
+            }
+            Button("Samenvoegen") {
+                clearExistingOnRestore = false
+                performRestore()
+            }
+            Button("Vervangen", role: .destructive) {
+                clearExistingOnRestore = true
+                performRestore()
+            }
+        } message: {
+            if let validation = backupValidation {
+                Text("Backup van \(validation.formattedDate) met \(validation.totalRecords) records.\n\nSamenvoegen: voeg toe aan bestaande data\nVervangen: wis alles en herstel")
+            } else {
+                Text("Wil je de backup herstellen?")
             }
         }
     }
@@ -384,6 +498,126 @@ struct SettingsView: View {
         } catch {
             appState.showAlert(title: "Backup mislukt", message: error.localizedDescription)
         }
+    }
+
+    private func handleRestoreFileSelection(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+
+            let hasAccess = url.startAccessingSecurityScopedResource()
+            defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
+
+            do {
+                // Copy file to temp location for later access
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(url.lastPathComponent)
+                try? FileManager.default.removeItem(at: tempURL)
+                try FileManager.default.copyItem(at: url, to: tempURL)
+
+                // Validate backup
+                let validation = try BackupService.shared.validateBackup(at: tempURL)
+                backupValidation = validation
+                pendingRestoreURL = tempURL
+                showRestoreConfirmation = true
+            } catch {
+                appState.showAlert(title: "Ongeldig backup bestand", message: error.localizedDescription)
+            }
+
+        case .failure(let error):
+            appState.showAlert(title: "Fout bij selecteren", message: error.localizedDescription)
+        }
+    }
+
+    private func performRestore() {
+        guard let url = pendingRestoreURL else { return }
+
+        isRestoring = true
+        restoreResult = nil
+
+        Task {
+            do {
+                let result = try await BackupService.shared.restoreBackup(
+                    from: url,
+                    modelContext: modelContext,
+                    clearExisting: clearExistingOnRestore
+                )
+
+                await MainActor.run {
+                    restoreResult = result
+                    isRestoring = false
+                    pendingRestoreURL = nil
+                    backupValidation = nil
+
+                    // Reload settings if restored
+                    if result.settingsRestored {
+                        loadSettings()
+                    }
+
+                    NotificationCenter.default.post(name: .dataImported, object: result)
+                }
+            } catch {
+                await MainActor.run {
+                    isRestoring = false
+                    appState.showAlert(title: "Herstel mislukt", message: error.localizedDescription)
+                }
+            }
+
+            // Clean up temp file
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+}
+
+// MARK: - Backup Document for File Exporter
+import UniformTypeIdentifiers
+
+struct BackupDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+
+    let modelContext: ModelContext
+
+    init(modelContext: ModelContext) {
+        self.modelContext = modelContext
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        fatalError("Reading not supported - use file importer instead")
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        // Create backup data synchronously for file exporter
+        let clientDescriptor = FetchDescriptor<Client>()
+        let clients = try modelContext.fetch(clientDescriptor)
+
+        let timeEntryDescriptor = FetchDescriptor<TimeEntry>()
+        let timeEntries = try modelContext.fetch(timeEntryDescriptor)
+
+        let invoiceDescriptor = FetchDescriptor<Invoice>()
+        let invoices = try modelContext.fetch(invoiceDescriptor)
+
+        let expenseDescriptor = FetchDescriptor<Expense>()
+        let expenses = try modelContext.fetch(expenseDescriptor)
+
+        let settingsDescriptor = FetchDescriptor<BusinessSettings>()
+        let settings = try modelContext.fetch(settingsDescriptor)
+
+        let backupData = BackupData(
+            version: "1.0",
+            createdAt: Date(),
+            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0",
+            clients: clients.map { ClientExport(from: $0) },
+            timeEntries: timeEntries.map { TimeEntryExport(from: $0) },
+            invoices: invoices.map { InvoiceExport(from: $0) },
+            expenses: expenses.map { ExpenseExport(from: $0) },
+            settings: settings.first.map { SettingsExport(from: $0) }
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+
+        let jsonData = try encoder.encode(backupData)
+        return FileWrapper(regularFileWithContents: jsonData)
     }
 }
 
