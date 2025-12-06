@@ -54,31 +54,28 @@ struct ExpenseFormView: View {
                 }
 
                 Section("Bedrag") {
-                    HStack {
-                        Text("Bedrag")
-                        Spacer()
-                        TextField("Bedrag", value: $bedrag, format: .currency(code: "EUR"))
+                    LabeledContent("Bedrag") {
+                        TextField("", value: $bedrag, format: .currency(code: "EUR"))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 120)
                             .multilineTextAlignment(.trailing)
                     }
 
-                    HStack {
-                        Text("Zakelijk percentage")
-                        Spacer()
-                        Slider(value: Binding(
-                            get: { Double(truncating: zakelijkPercentage as NSDecimalNumber) },
-                            set: { zakelijkPercentage = Decimal($0) }
-                        ), in: 0...100, step: 5)
-                        .frame(width: 150)
-                        Text("\(Int(truncating: zakelijkPercentage as NSDecimalNumber))%")
-                            .frame(width: 40)
+                    LabeledContent("Zakelijk percentage") {
+                        HStack(spacing: 8) {
+                            Slider(value: Binding(
+                                get: { Double(truncating: zakelijkPercentage as NSDecimalNumber) },
+                                set: { zakelijkPercentage = Decimal($0) }
+                            ), in: 0...100, step: 5)
+                            .frame(width: 150)
+                            Text("\(Int(truncating: zakelijkPercentage as NSDecimalNumber))%")
+                                .monospacedDigit()
+                                .frame(width: 45, alignment: .trailing)
+                        }
                     }
 
                     if zakelijkPercentage < 100 {
-                        HStack {
-                            Text("Zakelijk bedrag")
-                            Spacer()
+                        LabeledContent("Zakelijk bedrag") {
                             Text(zakelijkBedrag.asCurrency)
                                 .fontWeight(.medium)
                                 .foregroundStyle(.blue)

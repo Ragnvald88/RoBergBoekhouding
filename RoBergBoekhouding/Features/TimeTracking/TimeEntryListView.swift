@@ -29,6 +29,57 @@ struct TimeEntryListView: View {
         return entries
     }
 
+    /// Entries grouped by week (week number -> entries)
+    private var entriesByWeek: [(week: Int, year: Int, entries: [TimeEntry])] {
+        let calendar = Calendar(identifier: .iso8601)
+        var grouped: [String: (week: Int, year: Int, entries: [TimeEntry])] = [:]
+
+        for entry in filteredEntries {
+            let weekOfYear = calendar.component(.weekOfYear, from: entry.datum)
+            let year = calendar.component(.yearForWeekOfYear, from: entry.datum)
+            let key = "\(year)-\(weekOfYear)"
+
+            if grouped[key] == nil {
+                grouped[key] = (week: weekOfYear, year: year, entries: [])
+            }
+            grouped[key]?.entries.append(entry)
+        }
+
+        // Sort by year desc, then week desc
+        return grouped.values
+            .sorted { ($0.year, $0.week) > ($1.year, $1.week) }
+    }
+
+    /// Format week range (e.g., "2-8 dec")
+    private func weekDateRange(week: Int, year: Int) -> String {
+        let calendar = Calendar(identifier: .iso8601)
+        var components = DateComponents()
+        components.weekOfYear = week
+        components.yearForWeekOfYear = year
+        components.weekday = 2 // Monday
+
+        guard let monday = calendar.date(from: components) else { return "" }
+        let sunday = calendar.date(byAdding: .day, value: 6, to: monday) ?? monday
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "nl_NL")
+
+        // Check if same month
+        let mondayMonth = calendar.component(.month, from: monday)
+        let sundayMonth = calendar.component(.month, from: sunday)
+
+        if mondayMonth == sundayMonth {
+            formatter.dateFormat = "d"
+            let start = formatter.string(from: monday)
+            formatter.dateFormat = "d MMM"
+            let end = formatter.string(from: sunday)
+            return "\(start)-\(end)"
+        } else {
+            formatter.dateFormat = "d MMM"
+            return "\(formatter.string(from: monday)) - \(formatter.string(from: sunday))"
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Summary Bar
@@ -49,114 +100,30 @@ struct TimeEntryListView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Table(filteredEntries, selection: $selectedEntries) {
-                    TableColumn("Datum") { entry in
-                        Text(entry.datumFormatted)
-                            .font(.subheadline)
-                    }
-                    .width(min: 90, ideal: 100)
-
-                    TableColumn("Klant") { entry in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.client?.bedrijfsnaam ?? entry.activiteit)
-                                .font(.subheadline.weight(.medium))
-                            Text(entry.locatie)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .width(min: 150, ideal: 200)
-
-                    TableColumn("Uren") { entry in
-                        Text(entry.uren.asDecimal)
-                            .font(.subheadline.monospacedDigit())
-                    }
-                    .width(60)
-
-                    TableColumn("Km") { entry in
-                        Text("\(entry.totaalKilometers)")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(entry.totaalKilometers > 0 ? .primary : .secondary)
-                    }
-                    .width(50)
-
-                    TableColumn("Bedrag") { entry in
-                        Text(entry.totaalbedrag.asCurrency)
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundStyle(entry.isBillable ? .primary : .secondary)
-                    }
-                    .width(min: 90, ideal: 100)
-
-                    TableColumn("Status") { entry in
-                        HStack(spacing: 4) {
-                            if entry.isInvoiced {
-                                Label("Gefactureerd", systemImage: "checkmark.circle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.green)
-                            } else if !entry.isBillable {
-                                Label("Niet factureerbaar", systemImage: "minus.circle")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Label("Open", systemImage: "circle")
-                                    .font(.caption)
-                                    .foregroundStyle(.orange)
+                List(selection: $selectedEntries) {
+                    ForEach(entriesByWeek, id: \.week) { weekGroup in
+                        Section {
+                            ForEach(weekGroup.entries.sorted { $0.datum > $1.datum }) { entry in
+                                TimeEntryRow(entry: entry)
+                                    .tag(entry.id)
+                                    .contextMenu {
+                                        entryContextMenu(for: entry)
+                                    }
                             }
+                        } header: {
+                            WeekHeaderView(
+                                week: weekGroup.week,
+                                dateRange: weekDateRange(week: weekGroup.week, year: weekGroup.year),
+                                totalHours: weekGroup.entries.reduce(0) { $0 + $1.uren },
+                                totalAmount: weekGroup.entries.reduce(0) { $0 + $1.totaalbedrag }
+                            )
                         }
                     }
-                    .width(min: 100, ideal: 120)
                 }
+                .listStyle(.inset(alternatesRowBackgrounds: true))
                 .contextMenu(forSelectionType: TimeEntry.ID.self) { selection in
                     let selectedItems = filteredEntries.filter { selection.contains($0.id) }
-
-                    // Always show "new entry" option
-                    Button {
-                        appState.selectedTimeEntry = nil
-                        appState.showNewTimeEntry = true
-                    } label: {
-                        Label("Nieuwe registratie", systemImage: "plus")
-                    }
-
-                    if selectedItems.count == 1, let entry = selectedItems.first {
-                        Button {
-                            appState.selectedTimeEntry = entry
-                            appState.showNewTimeEntry = true
-                        } label: {
-                            Label("Bewerken", systemImage: "pencil")
-                        }
-
-                        // Option to duplicate for same client
-                        if let client = entry.client {
-                            Button {
-                                duplicateEntryForClient(entry, client: client)
-                            } label: {
-                                Label("Kopieer voor \(client.bedrijfsnaam)", systemImage: "doc.on.doc")
-                            }
-                        }
-                    }
-
-                    // Invoice option for unbilled billable entries
-                    let unbilledItems = selectedItems.filter { $0.isBillable && !$0.isInvoiced }
-                    if !unbilledItems.isEmpty {
-                        Divider()
-
-                        Button {
-                            createInvoiceFromEntries(unbilledItems)
-                        } label: {
-                            Label(unbilledItems.count == 1 ? "Factureer" : "Factureer \(unbilledItems.count) items", systemImage: "doc.text")
-                        }
-                    }
-
-                    if !selectedItems.isEmpty {
-                        Divider()
-
-                        Button(role: .destructive) {
-                            entriesToDelete = selectedItems
-                            showingDeleteAlert = true
-                        } label: {
-                            Label(selectedItems.count == 1 ? "Verwijderen" : "Verwijder \(selectedItems.count) items", systemImage: "trash")
-                        }
-                    }
+                    bulkContextMenu(for: selectedItems)
                 } primaryAction: { selection in
                     if selection.count == 1, let id = selection.first,
                        let entry = filteredEntries.first(where: { $0.id == id }) {
@@ -260,6 +227,90 @@ struct TimeEntryListView: View {
         .background(.bar)
     }
 
+    // MARK: - Context Menus
+    @ViewBuilder
+    private func entryContextMenu(for entry: TimeEntry) -> some View {
+        Button {
+            appState.selectedTimeEntry = entry
+            appState.showNewTimeEntry = true
+        } label: {
+            Label("Bewerken", systemImage: "pencil")
+        }
+
+        if let client = entry.client {
+            Button {
+                duplicateEntryForClient(entry, client: client)
+            } label: {
+                Label("Kopieer voor \(client.bedrijfsnaam)", systemImage: "doc.on.doc")
+            }
+        }
+
+        if entry.isBillable && !entry.isInvoiced {
+            Divider()
+            Button {
+                createInvoiceFromEntries([entry])
+            } label: {
+                Label("Factureer", systemImage: "doc.text")
+            }
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            entriesToDelete = [entry]
+            showingDeleteAlert = true
+        } label: {
+            Label("Verwijderen", systemImage: "trash")
+        }
+    }
+
+    @ViewBuilder
+    private func bulkContextMenu(for selectedItems: [TimeEntry]) -> some View {
+        Button {
+            appState.selectedTimeEntry = nil
+            appState.showNewTimeEntry = true
+        } label: {
+            Label("Nieuwe registratie", systemImage: "plus")
+        }
+
+        if selectedItems.count == 1, let entry = selectedItems.first {
+            Button {
+                appState.selectedTimeEntry = entry
+                appState.showNewTimeEntry = true
+            } label: {
+                Label("Bewerken", systemImage: "pencil")
+            }
+
+            if let client = entry.client {
+                Button {
+                    duplicateEntryForClient(entry, client: client)
+                } label: {
+                    Label("Kopieer voor \(client.bedrijfsnaam)", systemImage: "doc.on.doc")
+                }
+            }
+        }
+
+        let unbilledItems = selectedItems.filter { $0.isBillable && !$0.isInvoiced }
+        if !unbilledItems.isEmpty {
+            Divider()
+            Button {
+                createInvoiceFromEntries(unbilledItems)
+            } label: {
+                Label(unbilledItems.count == 1 ? "Factureer" : "Factureer \(unbilledItems.count) items", systemImage: "doc.text")
+            }
+        }
+
+        if !selectedItems.isEmpty {
+            Divider()
+            Button(role: .destructive) {
+                entriesToDelete = selectedItems
+                showingDeleteAlert = true
+            } label: {
+                Label(selectedItems.count == 1 ? "Verwijderen" : "Verwijder \(selectedItems.count) items", systemImage: "trash")
+            }
+        }
+    }
+
     // MARK: - Helper Methods
     private func monthName(_ month: Int) -> String {
         let formatter = DateFormatter()
@@ -322,6 +373,117 @@ struct StatItem: View {
             Text(value)
                 .font(.subheadline.weight(.medium))
         }
+    }
+}
+
+// MARK: - Week Header View
+struct WeekHeaderView: View {
+    let week: Int
+    let dateRange: String
+    let totalHours: Decimal
+    let totalAmount: Decimal
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Week badge
+            Text("Week \(week)")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.accentColor.opacity(0.15))
+                .foregroundStyle(.accent)
+                .clipShape(Capsule())
+
+            Text(dateRange)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            // Week totals
+            HStack(spacing: 16) {
+                Label(totalHours.asDecimal + " uur", systemImage: "clock")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                Text(totalAmount.asCurrency)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Time Entry Row
+struct TimeEntryRow: View {
+    let entry: TimeEntry
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Date column
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.datum, format: .dateTime.weekday(.abbreviated))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Text(entry.datum, format: .dateTime.day().month(.abbreviated))
+                    .font(.subheadline.weight(.medium))
+            }
+            .frame(width: 50, alignment: .leading)
+
+            // Client & Activity
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.client?.bedrijfsnaam ?? entry.activiteit)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(entry.locatie)
+                    if entry.isStandby {
+                        Text("•")
+                        Text("Achterwacht")
+                            .foregroundStyle(.purple)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Hours
+            Text(entry.uren.asDecimal)
+                .font(.subheadline.monospacedDigit())
+                .frame(width: 40, alignment: .trailing)
+
+            // Km
+            Text(entry.totaalKilometers > 0 ? "\(entry.totaalKilometers)" : "-")
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(entry.totaalKilometers > 0 ? .primary : .tertiary)
+                .frame(width: 40, alignment: .trailing)
+
+            // Amount
+            Text(entry.totaalbedrag.asCurrency)
+                .font(.subheadline.monospacedDigit().weight(.medium))
+                .foregroundStyle(entry.isBillable ? .primary : .secondary)
+                .frame(width: 80, alignment: .trailing)
+
+            // Status indicator
+            Group {
+                if entry.isInvoiced {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                } else if !entry.isBillable {
+                    Image(systemName: "minus.circle")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Image(systemName: "circle")
+                        .foregroundStyle(.orange)
+                }
+            }
+            .font(.subheadline)
+            .frame(width: 24)
+        }
+        .padding(.vertical, 4)
     }
 }
 

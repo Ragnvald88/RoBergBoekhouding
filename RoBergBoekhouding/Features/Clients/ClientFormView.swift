@@ -82,33 +82,29 @@ struct ClientFormView: View {
                 }
 
                 Section("Tarieven") {
-                    HStack {
-                        Text("Standaard uurtarief")
-                        Spacer()
-                        TextField("Tarief", value: $standaardUurtarief, format: .currency(code: "EUR"))
+                    LabeledContent("Standaard uurtarief") {
+                        TextField("", value: $standaardUurtarief, format: .currency(code: "EUR"))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 100)
                             .multilineTextAlignment(.trailing)
                     }
 
-                    HStack {
-                        Text("Kilometertarief")
-                        Spacer()
-                        TextField("Tarief", value: $standaardKmTarief, format: .currency(code: "EUR"))
+                    LabeledContent("Kilometertarief") {
+                        TextField("", value: $standaardKmTarief, format: .currency(code: "EUR"))
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 100)
                             .multilineTextAlignment(.trailing)
                     }
 
-                    HStack {
-                        Text("Retourafstand")
-                        Spacer()
-                        TextField("km", value: $afstandRetour, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-                            .multilineTextAlignment(.trailing)
-                        Text("km")
-                            .foregroundStyle(.secondary)
+                    LabeledContent("Retourafstand") {
+                        HStack(spacing: 4) {
+                            TextField("", value: $afstandRetour, format: .number)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 80)
+                                .multilineTextAlignment(.trailing)
+                            Text("km")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
