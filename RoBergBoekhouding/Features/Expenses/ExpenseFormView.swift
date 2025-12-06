@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct ExpenseFormView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query private var settings: [BusinessSettings]
 
     let expense: Expense?
 
@@ -16,13 +17,31 @@ struct ExpenseFormView: View {
     @State private var leverancier: String = ""
     @State private var zakelijkPercentage: Decimal = 100
     @State private var isRecurring: Bool = false
+    @State private var isDepreciable: Bool = false
+    @State private var factuurNummer: String = ""
     @State private var notities: String = ""
     @State private var receiptError: String?
     @State private var pendingReceiptURL: URL? // For new expenses - receipt to attach after save
     @State private var showingDeleteAlert: Bool = false
+    @State private var showingAssetForm: Bool = false
 
     private var isEditing: Bool { expense != nil }
     private var canSave: Bool { !omschrijving.isEmpty && bedrag > 0 }
+
+    private var businessSettings: BusinessSettings? {
+        settings.first
+    }
+
+    /// Check if amount qualifies for depreciation
+    private var qualifiesForDepreciation: Bool {
+        guard let settings = businessSettings else { return bedrag >= 450 }
+        return settings.qualifiesForDepreciation(amount: bedrag)
+    }
+
+    /// Threshold for depreciation display
+    private var depreciationThreshold: Decimal {
+        businessSettings?.afschrijvingDrempel ?? 450
+    }
 
     private var zakelijkBedrag: Decimal {
         bedrag * (zakelijkPercentage / 100)
@@ -83,6 +102,52 @@ struct ExpenseFormView: View {
                     }
 
                     Toggle("Maandelijks terugkerend", isOn: $isRecurring)
+
+                    TextField("Factuurnummer leverancier", text: $factuurNummer)
+                }
+
+                // Depreciation section - only show when amount qualifies
+                if qualifiesForDepreciation {
+                    Section("Afschrijving") {
+                        Toggle(isOn: $isDepreciable) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Als bedrijfsmiddel afschrijven")
+                                Text("Bedrag boven \(depreciationThreshold.asCurrency) - komt in aanmerking voor afschrijving")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if isDepreciable {
+                            HStack {
+                                Image(systemName: "info.circle")
+                                    .foregroundStyle(.blue)
+                                Text("Na opslaan kun je de afschrijvingsgegevens instellen")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        // Show link to asset if already linked
+                        if let asset = expense?.asset {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                VStack(alignment: .leading) {
+                                    Text("Gekoppeld aan: \(asset.naam)")
+                                        .font(.subheadline)
+                                    Text("Boekwaarde: \(asset.boekwaarde.asCurrency)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("Bewerk") {
+                                    showingAssetForm = true
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                    }
                 }
 
                 Section("Notities") {
@@ -147,10 +212,15 @@ struct ExpenseFormView: View {
             // Footer
             footer
         }
-        .frame(width: 450, height: 500)
+        .frame(width: 480, height: 620)
         .onAppear {
             if let expense {
                 loadExpense(expense)
+            }
+        }
+        .sheet(isPresented: $showingAssetForm) {
+            if let asset = expense?.asset {
+                AssetFormView(asset: asset)
             }
         }
     }
@@ -207,6 +277,8 @@ struct ExpenseFormView: View {
         leverancier = expense.leverancier ?? ""
         zakelijkPercentage = expense.zakelijkPercentage
         isRecurring = expense.isRecurring
+        isDepreciable = expense.isDepreciable
+        factuurNummer = expense.factuurNummer ?? ""
         notities = expense.notities ?? ""
     }
 
@@ -220,8 +292,13 @@ struct ExpenseFormView: View {
             expense.leverancier = leverancier.isEmpty ? nil : leverancier
             expense.zakelijkPercentage = zakelijkPercentage
             expense.isRecurring = isRecurring
+            expense.isDepreciable = isDepreciable
+            expense.factuurNummer = factuurNummer.isEmpty ? nil : factuurNummer
             expense.notities = notities.isEmpty ? nil : notities
             expense.updateTimestamp()
+
+            try? modelContext.save()
+            dismiss()
         } else {
             // Create new
             let newExpense = Expense(
@@ -232,6 +309,8 @@ struct ExpenseFormView: View {
                 leverancier: leverancier.isEmpty ? nil : leverancier,
                 zakelijkPercentage: zakelijkPercentage,
                 isRecurring: isRecurring,
+                isDepreciable: isDepreciable,
+                factuurNummer: factuurNummer.isEmpty ? nil : factuurNummer,
                 notities: notities.isEmpty ? nil : notities
             )
             modelContext.insert(newExpense)
@@ -240,10 +319,34 @@ struct ExpenseFormView: View {
             if let receiptURL = pendingReceiptURL {
                 try? newExpense.attachReceipt(from: receiptURL)
             }
-        }
 
-        try? modelContext.save()
-        dismiss()
+            try? modelContext.save()
+
+            // If marked as depreciable, create a linked asset
+            if isDepreciable {
+                // Create asset with pre-filled data from expense
+                let asset = Asset(
+                    naam: omschrijving,
+                    aanschafdatum: datum,
+                    inGebruikDatum: datum,
+                    aanschafwaarde: bedrag,
+                    restwaarde: businessSettings?.defaultRestwaarde(for: bedrag) ?? (bedrag * Decimal(string: "0.10")!),
+                    afschrijvingsjaren: businessSettings?.afschrijvingMinJaren ?? 5,
+                    leverancier: leverancier.isEmpty ? nil : leverancier,
+                    factuurNummer: factuurNummer.isEmpty ? nil : factuurNummer,
+                    zakelijkPercentage: zakelijkPercentage
+                )
+                asset.expense = newExpense
+                newExpense.asset = asset
+                modelContext.insert(asset)
+                try? modelContext.save()
+
+                // Notify that asset was created
+                NotificationCenter.default.post(name: .assetCreated, object: asset)
+            }
+
+            dismiss()
+        }
     }
 
     private func deleteExpense() {
