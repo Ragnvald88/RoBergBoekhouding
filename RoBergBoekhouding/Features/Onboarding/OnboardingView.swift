@@ -231,24 +231,16 @@ private struct ContactStep: View {
             Form {
                 Section {
                     TextField("Adres", text: $formData.adres)
-                        .textFieldStyle(.roundedBorder)
 
-                    LabeledContent("Postcode / Plaats") {
-                        HStack(spacing: Spacing.sm) {
-                            TextField("1234 AB", text: $formData.postcode)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 100)
-
-                            TextField("Plaatsnaam", text: $formData.plaats)
-                                .textFieldStyle(.roundedBorder)
-                        }
+                    HStack {
+                        TextField("Postcode", text: $formData.postcode)
+                            .frame(width: 100)
+                        TextField("Plaats", text: $formData.plaats)
                     }
 
                     TextField("E-mailadres", text: $formData.email)
-                        .textFieldStyle(.roundedBorder)
 
                     TextField("Telefoonnummer", text: $formData.telefoon)
-                        .textFieldStyle(.roundedBorder)
                 }
             }
             .formStyle(.grouped)
